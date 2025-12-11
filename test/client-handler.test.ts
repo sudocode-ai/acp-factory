@@ -199,6 +199,180 @@ describe("ACPClientHandler", () => {
     });
   });
 
+  describe("interactive permission mode", () => {
+    const createPermissionRequest = (
+      sessionId: string,
+      options: Array<{ kind: string; optionId: string; name: string }>
+    ) => ({
+      sessionId,
+      toolCall: {
+        toolCallId: "tool-1",
+        title: "Test Tool",
+        status: "pending",
+      },
+      options: options.map((opt) => ({
+        kind: opt.kind as "allow_once" | "allow_always" | "reject_once" | "reject_always",
+        optionId: opt.optionId,
+        name: opt.name,
+      })),
+    });
+
+    it("should emit permission request to session stream", async () => {
+      const handler = new ACPClientHandler({}, "interactive");
+      const stream = handler.getSessionStream("session-1");
+
+      // Start permission request (will block until responded)
+      const permissionPromise = handler.requestPermission(
+        createPermissionRequest("session-1", [
+          { kind: "allow_once", optionId: "allow", name: "Allow" },
+          { kind: "reject_once", optionId: "reject", name: "Reject" },
+        ])
+      );
+
+      // Get the emitted update from the stream
+      const iterator = stream[Symbol.asyncIterator]();
+      const { value: update } = await iterator.next();
+
+      expect(update.sessionUpdate).toBe("permission_request");
+      expect((update as any).requestId).toMatch(/^perm-\d+$/);
+      expect((update as any).sessionId).toBe("session-1");
+      expect((update as any).toolCall.toolCallId).toBe("tool-1");
+      expect((update as any).options).toHaveLength(2);
+
+      // Respond to unblock the promise
+      handler.respondToPermission((update as any).requestId, "allow");
+      const result = await permissionPromise;
+
+      expect(result.outcome).toEqual({
+        outcome: "selected",
+        optionId: "allow",
+      });
+    });
+
+    it("should handle respondToPermission correctly", async () => {
+      const handler = new ACPClientHandler({}, "interactive");
+      handler.getSessionStream("session-1"); // Initialize stream
+
+      const permissionPromise = handler.requestPermission(
+        createPermissionRequest("session-1", [
+          { kind: "allow_once", optionId: "allow", name: "Allow" },
+          { kind: "reject_once", optionId: "reject", name: "Reject" },
+        ])
+      );
+
+      // Wait a tick for the update to be pushed
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Get pending permission IDs
+      const pendingIds = handler.getPendingPermissionIds("session-1");
+      expect(pendingIds).toHaveLength(1);
+
+      // Respond with reject
+      handler.respondToPermission(pendingIds[0], "reject");
+      const result = await permissionPromise;
+
+      expect(result.outcome).toEqual({
+        outcome: "selected",
+        optionId: "reject",
+      });
+    });
+
+    it("should handle cancelPermission correctly", async () => {
+      const handler = new ACPClientHandler({}, "interactive");
+      handler.getSessionStream("session-1");
+
+      const permissionPromise = handler.requestPermission(
+        createPermissionRequest("session-1", [
+          { kind: "allow_once", optionId: "allow", name: "Allow" },
+        ])
+      );
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const pendingIds = handler.getPendingPermissionIds("session-1");
+      handler.cancelPermission(pendingIds[0]);
+
+      const result = await permissionPromise;
+      expect(result.outcome).toEqual({
+        outcome: "cancelled",
+      });
+    });
+
+    it("should throw error when responding to non-existent permission", () => {
+      const handler = new ACPClientHandler({}, "interactive");
+
+      expect(() => handler.respondToPermission("non-existent", "allow")).toThrow(
+        "No pending permission request with ID: non-existent"
+      );
+    });
+
+    it("should throw error when cancelling non-existent permission", () => {
+      const handler = new ACPClientHandler({}, "interactive");
+
+      expect(() => handler.cancelPermission("non-existent")).toThrow(
+        "No pending permission request with ID: non-existent"
+      );
+    });
+
+    it("should track hasPendingPermissions correctly", async () => {
+      const handler = new ACPClientHandler({}, "interactive");
+      handler.getSessionStream("session-1");
+
+      expect(handler.hasPendingPermissions()).toBe(false);
+
+      const permissionPromise = handler.requestPermission(
+        createPermissionRequest("session-1", [
+          { kind: "allow_once", optionId: "allow", name: "Allow" },
+        ])
+      );
+
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(handler.hasPendingPermissions()).toBe(true);
+
+      const pendingIds = handler.getPendingPermissionIds("session-1");
+      handler.respondToPermission(pendingIds[0], "allow");
+      await permissionPromise;
+
+      expect(handler.hasPendingPermissions()).toBe(false);
+    });
+
+    it("should handle multiple pending permissions for different sessions", async () => {
+      const handler = new ACPClientHandler({}, "interactive");
+      handler.getSessionStream("session-1");
+      handler.getSessionStream("session-2");
+
+      const promise1 = handler.requestPermission(
+        createPermissionRequest("session-1", [
+          { kind: "allow_once", optionId: "allow", name: "Allow" },
+        ])
+      );
+
+      const promise2 = handler.requestPermission(
+        createPermissionRequest("session-2", [
+          { kind: "allow_once", optionId: "allow", name: "Allow" },
+        ])
+      );
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(handler.getPendingPermissionIds("session-1")).toHaveLength(1);
+      expect(handler.getPendingPermissionIds("session-2")).toHaveLength(1);
+
+      // Respond to session-1
+      const ids1 = handler.getPendingPermissionIds("session-1");
+      handler.respondToPermission(ids1[0], "allow");
+      await promise1;
+
+      expect(handler.getPendingPermissionIds("session-1")).toHaveLength(0);
+      expect(handler.getPendingPermissionIds("session-2")).toHaveLength(1);
+
+      // Respond to session-2
+      const ids2 = handler.getPendingPermissionIds("session-2");
+      handler.respondToPermission(ids2[0], "allow");
+      await promise2;
+    });
+  });
+
   describe("sessionUpdate", () => {
     it("should push updates to session stream", async () => {
       const handler = new ACPClientHandler();

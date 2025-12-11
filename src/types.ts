@@ -100,8 +100,37 @@ export interface AgentConfig {
 
 /**
  * Permission handling mode
+ * - "auto-approve": Automatically approve all permission requests
+ * - "auto-deny": Automatically deny all permission requests
+ * - "callback": Use the onPermissionRequest callback handler
+ * - "interactive": Emit permission requests as session updates for UI handling
  */
-export type PermissionMode = "auto-approve" | "auto-deny" | "callback";
+export type PermissionMode = "auto-approve" | "auto-deny" | "callback" | "interactive";
+
+/**
+ * A permission request emitted as a session update (for interactive mode)
+ */
+export interface PermissionRequestUpdate {
+  sessionUpdate: "permission_request";
+  /** Unique ID for this permission request (use to respond) */
+  requestId: string;
+  /** Session this request belongs to */
+  sessionId: string;
+  /** The tool call that triggered this permission request */
+  toolCall: {
+    toolCallId: string;
+    title: string;
+    status: string;
+    rawInput?: unknown;
+  };
+  /** Available options for the user to choose from */
+  options: acp.PermissionOption[];
+}
+
+/**
+ * Extended session update type that includes permission requests
+ */
+export type ExtendedSessionUpdate = acp.SessionUpdate | PermissionRequestUpdate;
 
 /**
  * Handlers for client-side operations

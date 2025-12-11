@@ -45,6 +45,12 @@ export type {
   PermissionOption,
 } from "./types.js";
 
+// Interactive permission types
+export type {
+  PermissionRequestUpdate,
+  ExtendedSessionUpdate,
+} from "./types.js";
+
 // Re-export ACP types - Terminals
 export type {
   CreateTerminalRequest,

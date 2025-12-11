@@ -266,4 +266,61 @@ describe("Session", () => {
       );
     });
   });
+
+  describe("permission methods", () => {
+    it("should delegate respondToPermission to clientHandler", () => {
+      const mockRespondToPermission = vi.fn();
+      mockClientHandler.respondToPermission = mockRespondToPermission;
+
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any
+      );
+
+      session.respondToPermission("perm-1", "allow");
+
+      expect(mockRespondToPermission).toHaveBeenCalledWith("perm-1", "allow");
+    });
+
+    it("should delegate cancelPermission to clientHandler", () => {
+      const mockCancelPermission = vi.fn();
+      mockClientHandler.cancelPermission = mockCancelPermission;
+
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any
+      );
+
+      session.cancelPermission("perm-1");
+
+      expect(mockCancelPermission).toHaveBeenCalledWith("perm-1");
+    });
+
+    it("should return pending permission status from clientHandler", () => {
+      mockClientHandler.getPendingPermissionIds = vi.fn().mockReturnValue(["perm-1", "perm-2"]);
+
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any
+      );
+
+      expect(session.hasPendingPermissions()).toBe(true);
+      expect(session.getPendingPermissionIds()).toEqual(["perm-1", "perm-2"]);
+    });
+
+    it("should return false when no pending permissions", () => {
+      mockClientHandler.getPendingPermissionIds = vi.fn().mockReturnValue([]);
+
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any
+      );
+
+      expect(session.hasPendingPermissions()).toBe(false);
+    });
+  });
 });

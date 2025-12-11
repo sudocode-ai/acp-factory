@@ -4,7 +4,12 @@
 
 import * as fs from "node:fs/promises";
 import type * as acp from "@agentclientprotocol/sdk";
-import type { ClientHandlers, PermissionMode } from "./types.js";
+import type {
+  ClientHandlers,
+  PermissionMode,
+  PermissionRequestUpdate,
+  ExtendedSessionUpdate,
+} from "./types.js";
 
 /**
  * A pushable async iterable for bridging push-based and async-iterator-based code.
@@ -60,6 +65,15 @@ export class Pushable<T> implements AsyncIterable<T> {
 }
 
 /**
+ * Deferred promise for pending permission requests
+ */
+interface PendingPermission {
+  resolve: (response: acp.RequestPermissionResponse) => void;
+  reject: (error: Error) => void;
+  sessionId: string;
+}
+
+/**
  * Implements the ACP Client interface, bridging agent requests to callbacks
  */
 export class ACPClientHandler implements acp.Client {
@@ -67,7 +81,13 @@ export class ACPClientHandler implements acp.Client {
   private permissionMode: PermissionMode;
 
   /** Per-session update streams */
-  private sessionStreams: Map<string, Pushable<acp.SessionUpdate>> = new Map();
+  private sessionStreams: Map<string, Pushable<ExtendedSessionUpdate>> = new Map();
+
+  /** Pending permission requests awaiting user response (interactive mode) */
+  private pendingPermissions: Map<string, PendingPermission> = new Map();
+
+  /** Counter for generating unique permission request IDs */
+  private permissionRequestCounter = 0;
 
   constructor(
     handlers: ClientHandlers = {},
@@ -80,10 +100,10 @@ export class ACPClientHandler implements acp.Client {
   /**
    * Get or create a pushable stream for a session
    */
-  getSessionStream(sessionId: string): Pushable<acp.SessionUpdate> {
+  getSessionStream(sessionId: string): Pushable<ExtendedSessionUpdate> {
     let stream = this.sessionStreams.get(sessionId);
     if (!stream) {
-      stream = new Pushable<acp.SessionUpdate>();
+      stream = new Pushable<ExtendedSessionUpdate>();
       this.sessionStreams.set(sessionId, stream);
     }
     return stream;
@@ -97,6 +117,64 @@ export class ACPClientHandler implements acp.Client {
     if (stream) {
       stream.end();
     }
+  }
+
+  /**
+   * Respond to a pending permission request (for interactive mode)
+   * @param requestId - The permission request ID from the PermissionRequestUpdate
+   * @param optionId - The optionId of the selected option
+   */
+  respondToPermission(requestId: string, optionId: string): void {
+    const pending = this.pendingPermissions.get(requestId);
+    if (!pending) {
+      throw new Error(`No pending permission request with ID: ${requestId}`);
+    }
+
+    this.pendingPermissions.delete(requestId);
+    pending.resolve({
+      outcome: {
+        outcome: "selected",
+        optionId,
+      },
+    });
+  }
+
+  /**
+   * Cancel a pending permission request (for interactive mode)
+   * @param requestId - The permission request ID from the PermissionRequestUpdate
+   */
+  cancelPermission(requestId: string): void {
+    const pending = this.pendingPermissions.get(requestId);
+    if (!pending) {
+      throw new Error(`No pending permission request with ID: ${requestId}`);
+    }
+
+    this.pendingPermissions.delete(requestId);
+    pending.resolve({
+      outcome: {
+        outcome: "cancelled",
+      },
+    });
+  }
+
+  /**
+   * Check if there are any pending permission requests
+   */
+  hasPendingPermissions(): boolean {
+    return this.pendingPermissions.size > 0;
+  }
+
+  /**
+   * Get all pending permission request IDs for a session
+   */
+  getPendingPermissionIds(sessionId: string): string[] {
+    const ids: string[] = [];
+    for (const [id, pending] of this.pendingPermissions) {
+      if (pending.sessionId === sessionId) {
+        ids.push(id);
+      }
+    }
+    return ids;
   }
 
   /**
@@ -141,6 +219,38 @@ export class ACPClientHandler implements acp.Client {
           },
         };
       }
+    }
+
+    // Interactive mode: emit permission request as session update and wait for response
+    if (this.permissionMode === "interactive") {
+      const requestId = `perm-${++this.permissionRequestCounter}`;
+
+      // Create the permission request update
+      const permissionUpdate: PermissionRequestUpdate = {
+        sessionUpdate: "permission_request",
+        requestId,
+        sessionId: params.sessionId,
+        toolCall: {
+          toolCallId: params.toolCall.toolCallId,
+          title: params.toolCall.title ?? "Unknown",
+          status: params.toolCall.status ?? "pending",
+          rawInput: params.toolCall.rawInput,
+        },
+        options: params.options,
+      };
+
+      // Emit to session stream
+      const stream = this.getSessionStream(params.sessionId);
+      stream.push(permissionUpdate);
+
+      // Create deferred promise and wait for response
+      return new Promise((resolve, reject) => {
+        this.pendingPermissions.set(requestId, {
+          resolve,
+          reject,
+          sessionId: params.sessionId,
+        });
+      });
     }
 
     // Fallback: if we have a handler, use it; otherwise pick first option

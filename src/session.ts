@@ -3,8 +3,7 @@
  */
 
 import type * as acp from "@agentclientprotocol/sdk";
-import type { PromptContent } from "./types.js";
-import type { SessionUpdate } from "@agentclientprotocol/sdk";
+import type { PromptContent, ExtendedSessionUpdate } from "./types.js";
 import type { ACPClientHandler } from "./client-handler.js";
 
 /**
@@ -34,8 +33,11 @@ export class Session {
 
   /**
    * Send a prompt and stream responses
+   *
+   * In interactive permission mode, this may yield PermissionRequestUpdate objects
+   * that require a response via respondToPermission() before the prompt can continue.
    */
-  async *prompt(content: PromptContent): AsyncIterable<SessionUpdate> {
+  async *prompt(content: PromptContent): AsyncIterable<ExtendedSessionUpdate> {
     // Convert string to ContentBlock array
     const promptBlocks: acp.ContentBlock[] =
       typeof content === "string"
@@ -108,5 +110,44 @@ export class Session {
       sessionId: this.id,
       mode,
     });
+  }
+
+  /**
+   * Respond to a permission request (for interactive permission mode)
+   *
+   * When using permissionMode: "interactive", permission requests are emitted
+   * as session updates with sessionUpdate: "permission_request". Call this method
+   * with the requestId and your chosen optionId to allow the prompt to continue.
+   *
+   * @param requestId - The requestId from the PermissionRequestUpdate
+   * @param optionId - The optionId of the selected permission option
+   */
+  respondToPermission(requestId: string, optionId: string): void {
+    this.clientHandler.respondToPermission(requestId, optionId);
+  }
+
+  /**
+   * Cancel a permission request (for interactive permission mode)
+   *
+   * This will cancel the permission request, which typically aborts the tool call.
+   *
+   * @param requestId - The requestId from the PermissionRequestUpdate
+   */
+  cancelPermission(requestId: string): void {
+    this.clientHandler.cancelPermission(requestId);
+  }
+
+  /**
+   * Check if there are any pending permission requests for this session
+   */
+  hasPendingPermissions(): boolean {
+    return this.clientHandler.getPendingPermissionIds(this.id).length > 0;
+  }
+
+  /**
+   * Get all pending permission request IDs for this session
+   */
+  getPendingPermissionIds(): string[] {
+    return this.clientHandler.getPendingPermissionIds(this.id);
   }
 }
