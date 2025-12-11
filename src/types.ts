@@ -4,17 +4,86 @@
 
 import type * as acp from "@agentclientprotocol/sdk";
 
-// Re-export useful ACP types
+// ============================================================================
+// Re-exported ACP Types
+// ============================================================================
+
+// Core session types
 export type {
+  /** Updates streamed during prompt processing */
   SessionUpdate,
+  /** Content blocks in prompts and responses */
   ContentBlock,
+  /** Text content block */
+  TextContent,
+  /** Image content block */
+  ImageContent,
+  /** Resource link content block */
+  ResourceLink,
+  /** Agent capabilities advertised during initialization */
   AgentCapabilities,
+  /** Reason why prompt processing stopped */
+  StopReason,
+} from "@agentclientprotocol/sdk";
+
+// Tool-related types
+export type {
+  /** A tool call initiated by the agent */
   ToolCall,
+  /** Update to a tool call's status or content */
   ToolCallUpdate,
+  /** Status of a tool call */
+  ToolCallStatus,
+  /** Content returned by a tool */
+  ToolCallContent,
+  /** Location affected by a tool call */
+  ToolCallLocation,
+} from "@agentclientprotocol/sdk";
+
+// Permission types
+export type {
+  /** Request for user permission */
   RequestPermissionRequest,
+  /** Response to permission request */
   RequestPermissionResponse,
+  /** A permission option presented to the user */
+  PermissionOption,
+} from "@agentclientprotocol/sdk";
+
+// Terminal types
+export type {
+  /** Request to create a terminal */
   CreateTerminalRequest,
+  /** Response with terminal ID */
   CreateTerminalResponse,
+  /** Request for terminal output */
+  TerminalOutputRequest,
+  /** Response with terminal output */
+  TerminalOutputResponse,
+} from "@agentclientprotocol/sdk";
+
+// MCP server configuration
+export type {
+  /** MCP server configuration (stdio, HTTP, or SSE) */
+  McpServer,
+  /** MCP server over stdio */
+  McpServerStdio,
+  /** MCP server over HTTP */
+  McpServerHttp,
+  /** MCP server over SSE */
+  McpServerSse,
+} from "@agentclientprotocol/sdk";
+
+// Session response types
+export type {
+  /** Response when creating a new session */
+  NewSessionResponse,
+  /** Response after prompt processing completes */
+  PromptResponse,
+  /** Request to initialize the connection */
+  InitializeRequest,
+  /** Response to initialization */
+  InitializeResponse,
 } from "@agentclientprotocol/sdk";
 
 /**
