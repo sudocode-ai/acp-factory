@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { ACPClientHandler, Pushable } from "./client-handler.js";
+import { ACPClientHandler, Pushable } from "../src/client-handler.js";
 import type {
   RequestPermissionRequest,
   SessionNotification,
@@ -273,7 +273,7 @@ describe("ACPClientHandler", () => {
       const mockRead = vi.fn().mockResolvedValue("custom content");
       const handler = new ACPClientHandler({ onFileRead: mockRead });
 
-      const result = await handler.readTextFile({ path: "/test/file.txt" });
+      const result = await handler.readTextFile({ path: "/test/file.txt", sessionId: "s1" });
 
       expect(mockRead).toHaveBeenCalledWith("/test/file.txt");
       expect(result.content).toBe("custom content");
@@ -283,7 +283,7 @@ describe("ACPClientHandler", () => {
       const handler = new ACPClientHandler();
 
       await expect(
-        handler.readTextFile({ path: "/nonexistent/path/file.txt" })
+        handler.readTextFile({ path: "/nonexistent/path/file.txt", sessionId: "s1" })
       ).rejects.toThrow("Failed to read file");
     });
   });
@@ -296,6 +296,7 @@ describe("ACPClientHandler", () => {
       const result = await handler.writeTextFile({
         path: "/test/file.txt",
         content: "test content",
+        sessionId: "s1",
       });
 
       expect(mockWrite).toHaveBeenCalledWith("/test/file.txt", "test content");
@@ -308,7 +309,7 @@ describe("ACPClientHandler", () => {
       const handler = new ACPClientHandler();
 
       await expect(
-        handler.createTerminal({ command: "ls", cwd: "/tmp" })
+        handler.createTerminal({ command: "ls", cwd: "/tmp", sessionId: "s1" })
       ).rejects.toThrow("no onTerminalCreate handler provided");
     });
 
@@ -316,7 +317,7 @@ describe("ACPClientHandler", () => {
       const handler = new ACPClientHandler();
 
       await expect(
-        handler.terminalOutput({ terminalId: "term-1" })
+        handler.terminalOutput({ terminalId: "term-1", sessionId: "s1" })
       ).rejects.toThrow("no onTerminalOutput handler provided");
     });
 
@@ -324,7 +325,7 @@ describe("ACPClientHandler", () => {
       const handler = new ACPClientHandler();
 
       await expect(
-        handler.killTerminal({ terminalId: "term-1" })
+        handler.killTerminal({ terminalId: "term-1", sessionId: "s1" })
       ).rejects.toThrow("no onTerminalKill handler provided");
     });
 
@@ -332,7 +333,7 @@ describe("ACPClientHandler", () => {
       const handler = new ACPClientHandler();
 
       await expect(
-        handler.releaseTerminal({ terminalId: "term-1" })
+        handler.releaseTerminal({ terminalId: "term-1", sessionId: "s1" })
       ).rejects.toThrow("no onTerminalRelease handler provided");
     });
 
@@ -340,7 +341,7 @@ describe("ACPClientHandler", () => {
       const handler = new ACPClientHandler();
 
       await expect(
-        handler.waitForTerminalExit({ terminalId: "term-1" })
+        handler.waitForTerminalExit({ terminalId: "term-1", sessionId: "s1" })
       ).rejects.toThrow("no onTerminalWaitForExit handler provided");
     });
 
@@ -348,9 +349,9 @@ describe("ACPClientHandler", () => {
       const mockCreate = vi.fn().mockResolvedValue({ terminalId: "term-123" });
       const handler = new ACPClientHandler({ onTerminalCreate: mockCreate });
 
-      const result = await handler.createTerminal({ command: "ls", cwd: "/tmp" });
+      const result = await handler.createTerminal({ command: "ls", cwd: "/tmp", sessionId: "s1" });
 
-      expect(mockCreate).toHaveBeenCalledWith({ command: "ls", cwd: "/tmp" });
+      expect(mockCreate).toHaveBeenCalledWith({ command: "ls", cwd: "/tmp", sessionId: "s1" });
       expect(result).toEqual({ terminalId: "term-123" });
     });
 
@@ -358,7 +359,7 @@ describe("ACPClientHandler", () => {
       const mockOutput = vi.fn().mockResolvedValue("output text");
       const handler = new ACPClientHandler({ onTerminalOutput: mockOutput });
 
-      const result = await handler.terminalOutput({ terminalId: "term-1" });
+      const result = await handler.terminalOutput({ terminalId: "term-1", sessionId: "s1" });
 
       expect(mockOutput).toHaveBeenCalledWith("term-1");
       expect(result).toEqual({ output: "output text", truncated: false });
@@ -368,7 +369,7 @@ describe("ACPClientHandler", () => {
       const mockWait = vi.fn().mockResolvedValue(0);
       const handler = new ACPClientHandler({ onTerminalWaitForExit: mockWait });
 
-      const result = await handler.waitForTerminalExit({ terminalId: "term-1" });
+      const result = await handler.waitForTerminalExit({ terminalId: "term-1", sessionId: "s1" });
 
       expect(mockWait).toHaveBeenCalledWith("term-1");
       expect(result).toEqual({ exitCode: 0 });

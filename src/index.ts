@@ -6,6 +6,7 @@
 export { AgentFactory } from "./factory.js";
 export { AgentHandle } from "./agent-handle.js";
 export { Session } from "./session.js";
+export { Pushable } from "./client-handler.js";
 
 // Library type exports
 export type {

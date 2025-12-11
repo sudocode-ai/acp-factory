@@ -2,9 +2,13 @@
  * AgentHandle - Represents a running agent with an ACP connection
  */
 
+import { spawn, type ChildProcess } from "node:child_process";
+import { Writable, Readable } from "node:stream";
+import * as acp from "@agentclientprotocol/sdk";
 import type { AgentConfig, SpawnOptions, SessionOptions } from "./types.js";
 import type { AgentCapabilities } from "@agentclientprotocol/sdk";
 import { Session } from "./session.js";
+import { ACPClientHandler } from "./client-handler.js";
 
 /**
  * Handle to a running agent process with ACP connection
@@ -13,8 +17,9 @@ export class AgentHandle {
   readonly capabilities: AgentCapabilities;
 
   private constructor(
-    private readonly config: AgentConfig,
-    private readonly options: SpawnOptions,
+    private readonly process: ChildProcess,
+    private readonly connection: acp.ClientSideConnection,
+    private readonly clientHandler: ACPClientHandler,
     capabilities: AgentCapabilities
   ) {
     this.capabilities = capabilities;
@@ -28,12 +33,82 @@ export class AgentHandle {
     config: AgentConfig,
     options: SpawnOptions
   ): Promise<AgentHandle> {
-    // TODO: Implement in i-2laf
-    // 1. Spawn subprocess with child_process.spawn()
-    // 2. Set up NDJSON streams via acp.ndJsonStream()
-    // 3. Create ClientSideConnection with ACPClientHandler
-    // 4. Call initialize() and store capabilities
-    throw new Error("Not implemented - see issue i-2laf");
+    // 1. Spawn subprocess
+    const env = {
+      ...process.env,
+      ...config.env,
+      ...options.env,
+    };
+
+    const agentProcess = spawn(config.command, config.args, {
+      stdio: ["pipe", "pipe", "inherit"],
+      env,
+    });
+
+    // Handle process errors
+    agentProcess.on("error", (err) => {
+      console.error(`Agent process error: ${err.message}`);
+    });
+
+    // 2. Set up NDJSON streams
+    if (!agentProcess.stdin || !agentProcess.stdout) {
+      agentProcess.kill();
+      throw new Error("Failed to get agent process stdio streams");
+    }
+
+    const input = Writable.toWeb(agentProcess.stdin);
+    const output = Readable.toWeb(agentProcess.stdout) as ReadableStream<Uint8Array>;
+    const stream = acp.ndJsonStream(input, output);
+
+    // 3. Create client handler and connection
+    const clientHandler = new ACPClientHandler(
+      {
+        onPermissionRequest: options.onPermissionRequest,
+        onFileRead: options.onFileRead,
+        onFileWrite: options.onFileWrite,
+        onTerminalCreate: options.onTerminalCreate,
+        onTerminalOutput: options.onTerminalOutput,
+        onTerminalKill: options.onTerminalKill,
+        onTerminalRelease: options.onTerminalRelease,
+        onTerminalWaitForExit: options.onTerminalWaitForExit,
+      },
+      options.permissionMode ?? "auto-approve"
+    );
+
+    const connection = new acp.ClientSideConnection(
+      () => clientHandler,
+      stream
+    );
+
+    // 4. Initialize connection
+    try {
+      const initResult = await connection.initialize({
+        protocolVersion: acp.PROTOCOL_VERSION,
+        clientCapabilities: {
+          fs: {
+            readTextFile: true,
+            writeTextFile: true,
+          },
+          terminal: !!(
+            options.onTerminalCreate &&
+            options.onTerminalOutput &&
+            options.onTerminalKill &&
+            options.onTerminalRelease &&
+            options.onTerminalWaitForExit
+          ),
+        },
+      });
+
+      return new AgentHandle(
+        agentProcess,
+        connection,
+        clientHandler,
+        initResult.agentCapabilities ?? {}
+      );
+    } catch (error) {
+      agentProcess.kill();
+      throw error;
+    }
   }
 
   /**
@@ -43,23 +118,69 @@ export class AgentHandle {
     cwd: string,
     options: SessionOptions = {}
   ): Promise<Session> {
-    // TODO: Implement in i-2laf
-    throw new Error("Not implemented - see issue i-2laf");
+    const result = await this.connection.newSession({
+      cwd,
+      mcpServers: options.mcpServers ?? [],
+    });
+
+    // Set mode if specified
+    if (options.mode && this.connection.setSessionMode) {
+      await this.connection.setSessionMode({
+        sessionId: result.sessionId,
+        mode: options.mode,
+      });
+    }
+
+    return new Session(
+      result.sessionId,
+      this.connection,
+      this.clientHandler,
+      result.availableModes?.map((m: { slug: string }) => m.slug) ?? [],
+      result.availableModels?.map((m: { id: string }) => m.id) ?? []
+    );
   }
 
   /**
    * Load an existing session by ID
    */
   async loadSession(sessionId: string): Promise<Session> {
-    // TODO: Implement in i-2laf
-    throw new Error("Not implemented - see issue i-2laf");
+    if (!this.capabilities.loadSession) {
+      throw new Error("Agent does not support loading sessions");
+    }
+
+    const result = await this.connection.loadSession({
+      sessionId,
+    });
+
+    return new Session(
+      result.sessionId,
+      this.connection,
+      this.clientHandler,
+      result.availableModes?.map((m: { slug: string }) => m.slug) ?? [],
+      result.availableModels?.map((m: { id: string }) => m.id) ?? []
+    );
   }
 
   /**
    * Close the agent connection and terminate the process
    */
   async close(): Promise<void> {
-    // TODO: Implement in i-2laf
-    throw new Error("Not implemented - see issue i-2laf");
+    this.process.kill();
+    // Wait for the connection to close
+    await this.connection.closed;
+  }
+
+  /**
+   * Get the underlying connection (for advanced use)
+   */
+  getConnection(): acp.ClientSideConnection {
+    return this.connection;
+  }
+
+  /**
+   * Check if the agent process is still running
+   */
+  isRunning(): boolean {
+    return !this.process.killed && this.process.exitCode === null;
   }
 }
