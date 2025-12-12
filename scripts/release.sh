@@ -20,10 +20,10 @@ if [ "$BRANCH" != "main" ]; then
   fi
 fi
 
-# Check for uncommitted changes
-if [ -n "$(git status --porcelain)" ]; then
+# Check for uncommitted changes (ignoring untracked files)
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo -e "${RED}Error: You have uncommitted changes. Please commit or stash them first.${NC}"
-  git status --short
+  git status --short --untracked-files=no
   exit 1
 fi
 
