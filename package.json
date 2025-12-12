@@ -1,0 +1,71 @@
+{
+  "name": "acp-factory",
+  "version": "0.0.1",
+  "description": "A library for spawning and managing agents through the Agent Client Protocol (ACP)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
+    "pretest:run": "npm run build",
+    "prepublishOnly": "npm run test:run && npm run build",
+    "version": "npm run build",
+    "postversion": "git push && git push --tags",
+    "release:patch": "npm version patch",
+    "release:minor": "npm version minor",
+    "release:major": "npm version major",
+    "publish:dry": "npm publish --dry-run",
+    "publish:npm": "npm publish --access public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sudocode-ai/acp-factory.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sudocode-ai/acp-factory/issues"
+  },
+  "homepage": "https://github.com/sudocode-ai/acp-factory#readme",
+  "keywords": [
+    "acp",
+    "agent",
+    "agent-client-protocol",
+    "claude",
+    "claude-code",
+    "ai",
+    "llm",
+    "typescript",
+    "sdk"
+  ],
+  "author": "Sudocode AI",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^0.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.0.0"
+  }
+}

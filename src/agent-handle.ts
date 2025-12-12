@@ -1,0 +1,218 @@
+/**
+ * AgentHandle - Represents a running agent with an ACP connection
+ */
+
+import { spawn, type ChildProcess } from "node:child_process";
+import { Writable, Readable } from "node:stream";
+import * as acp from "@agentclientprotocol/sdk";
+import type { AgentConfig, SpawnOptions, SessionOptions } from "./types.js";
+import type { AgentCapabilities } from "@agentclientprotocol/sdk";
+import { Session } from "./session.js";
+import { ACPClientHandler } from "./client-handler.js";
+
+/**
+ * Handle to a running agent process with ACP connection
+ */
+export class AgentHandle {
+  readonly capabilities: AgentCapabilities;
+
+  private constructor(
+    private readonly process: ChildProcess,
+    private readonly connection: acp.ClientSideConnection,
+    private readonly clientHandler: ACPClientHandler,
+    capabilities: AgentCapabilities
+  ) {
+    this.capabilities = capabilities;
+  }
+
+  /**
+   * Create and initialize an agent handle
+   * @internal
+   */
+  static async create(
+    config: AgentConfig,
+    options: SpawnOptions
+  ): Promise<AgentHandle> {
+    // 1. Spawn subprocess
+    const env = {
+      ...process.env,
+      ...config.env,
+      ...options.env,
+    };
+
+    const agentProcess = spawn(config.command, config.args, {
+      stdio: ["pipe", "pipe", "inherit"],
+      env,
+    });
+
+    // Handle process errors
+    agentProcess.on("error", (err) => {
+      console.error(`Agent process error: ${err.message}`);
+    });
+
+    // 2. Set up NDJSON streams
+    if (!agentProcess.stdin || !agentProcess.stdout) {
+      agentProcess.kill();
+      throw new Error("Failed to get agent process stdio streams");
+    }
+
+    const input = Writable.toWeb(agentProcess.stdin);
+    const output = Readable.toWeb(agentProcess.stdout) as ReadableStream<Uint8Array>;
+    const stream = acp.ndJsonStream(input, output);
+
+    // 3. Create client handler and connection
+    const clientHandler = new ACPClientHandler(
+      {
+        onPermissionRequest: options.onPermissionRequest,
+        onFileRead: options.onFileRead,
+        onFileWrite: options.onFileWrite,
+        onTerminalCreate: options.onTerminalCreate,
+        onTerminalOutput: options.onTerminalOutput,
+        onTerminalKill: options.onTerminalKill,
+        onTerminalRelease: options.onTerminalRelease,
+        onTerminalWaitForExit: options.onTerminalWaitForExit,
+      },
+      options.permissionMode ?? "auto-approve"
+    );
+
+    const connection = new acp.ClientSideConnection(
+      () => clientHandler,
+      stream
+    );
+
+    // 4. Initialize connection
+    try {
+      const initResult = await connection.initialize({
+        protocolVersion: acp.PROTOCOL_VERSION,
+        clientCapabilities: {
+          fs: {
+            readTextFile: true,
+            writeTextFile: true,
+          },
+          terminal: !!(
+            options.onTerminalCreate &&
+            options.onTerminalOutput &&
+            options.onTerminalKill &&
+            options.onTerminalRelease &&
+            options.onTerminalWaitForExit
+          ),
+        },
+      });
+
+      return new AgentHandle(
+        agentProcess,
+        connection,
+        clientHandler,
+        initResult.agentCapabilities ?? {}
+      );
+    } catch (error) {
+      agentProcess.kill();
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new session with the agent
+   */
+  async createSession(
+    cwd: string,
+    options: SessionOptions = {}
+  ): Promise<Session> {
+    const result = await this.connection.newSession({
+      cwd,
+      mcpServers: options.mcpServers ?? [],
+    });
+
+    // Set mode if specified
+    if (options.mode && this.connection.setSessionMode) {
+      await this.connection.setSessionMode({
+        sessionId: result.sessionId,
+        modeId: options.mode,
+      });
+    }
+
+    return new Session(
+      result.sessionId,
+      this.connection,
+      this.clientHandler,
+      result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
+      result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
+    );
+  }
+
+  /**
+   * Load an existing session by ID
+   */
+  async loadSession(
+    sessionId: string,
+    cwd: string,
+    mcpServers: Array<{ name: string; uri: string }> = []
+  ): Promise<Session> {
+    if (!this.capabilities.loadSession) {
+      throw new Error("Agent does not support loading sessions");
+    }
+
+    const result = await this.connection.loadSession({
+      sessionId,
+      cwd,
+      mcpServers,
+    });
+
+    return new Session(
+      sessionId,
+      this.connection,
+      this.clientHandler,
+      result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
+      result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
+    );
+  }
+
+  /**
+   * Fork an existing session to create a new independent session
+   *
+   * The forked session inherits the conversation history from the original,
+   * allowing operations without affecting the original session's state.
+   *
+   * @experimental This relies on the unstable session/fork ACP capability
+   */
+  async forkSession(sessionId: string): Promise<Session> {
+    if (!this.capabilities.sessionCapabilities?.fork) {
+      throw new Error("Agent does not support forking sessions");
+    }
+
+    const result = await this.connection.forkSession({
+      sessionId,
+    });
+
+    return new Session(
+      result.sessionId,
+      this.connection,
+      this.clientHandler,
+      result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
+      result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
+    );
+  }
+
+  /**
+   * Close the agent connection and terminate the process
+   */
+  async close(): Promise<void> {
+    this.process.kill();
+    // Wait for the connection to close
+    await this.connection.closed;
+  }
+
+  /**
+   * Get the underlying connection (for advanced use)
+   */
+  getConnection(): acp.ClientSideConnection {
+    return this.connection;
+  }
+
+  /**
+   * Check if the agent process is still running
+   */
+  isRunning(): boolean {
+    return !this.process.killed && this.process.exitCode === null;
+  }
+}
