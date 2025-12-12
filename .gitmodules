@@ -1,0 +1,3 @@
+[submodule "references/claude-code-acp"]
+	path = references/claude-code-acp
+	url = https://github.com/sudocode-ai/claude-code-acp.git
