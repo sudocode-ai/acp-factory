@@ -100,6 +100,85 @@ export class Session {
   }
 
   /**
+   * Interrupt the current prompt and start a new one with additional context.
+   *
+   * This cancels any in-progress prompt and immediately starts a new prompt.
+   * The agent will restart its work but retains the conversation history.
+   *
+   * Use this when you need to redirect or add context to the agent's work.
+   *
+   * @param content - The new prompt content (can reference or build upon previous context)
+   * @returns AsyncIterable of session updates for the new prompt
+   *
+   * @example
+   * ```typescript
+   * // Original prompt running
+   * for await (const update of session.prompt("Analyze the codebase")) {
+   *   handleUpdate(update);
+   *   if (userWantsToRedirect) {
+   *     // Interrupt and redirect
+   *     for await (const update of session.interruptWith("Focus only on the /src directory")) {
+   *       handleUpdate(update);
+   *     }
+   *     break;
+   *   }
+   * }
+   * ```
+   */
+  async *interruptWith(content: PromptContent): AsyncIterable<ExtendedSessionUpdate> {
+    // Cancel any in-progress prompt
+    await this.cancel();
+
+    // Small delay to allow cancellation to propagate
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Start new prompt and yield its updates
+    yield* this.prompt(content);
+  }
+
+  /**
+   * Add context to the agent while it's working (without interrupting).
+   *
+   * NOTE: This feature requires agent support for mid-execution messaging.
+   * Currently, claude-code-acp does not support this. When called, this method
+   * will throw an error. Use `interruptWith()` as an alternative.
+   *
+   * In the future, when agent adapters support the `_session/addContext` extension,
+   * this method will push context to the agent without cancelling current work.
+   *
+   * @param content - Additional context to send to the agent
+   * @throws Error - Always throws until agent support is available
+   *
+   * @example
+   * ```typescript
+   * // Future usage (not yet supported):
+   * for await (const update of session.prompt("Analyze the codebase")) {
+   *   handleUpdate(update);
+   *   if (userHasAdditionalContext) {
+   *     // Add context without interrupting (future)
+   *     await session.addContext("Also check the test coverage");
+   *   }
+   * }
+   * ```
+   */
+  async addContext(_content: PromptContent): Promise<void> {
+    // TODO: When claude-code-acp supports _session/addContext extension,
+    // implement this using:
+    // await this.connection.extMethod("session/addContext", {
+    //   sessionId: this.id,
+    //   content: typeof _content === "string"
+    //     ? [{ type: "text", text: _content }]
+    //     : _content,
+    // });
+
+    throw new Error(
+      "addContext() is not yet supported. The agent adapter must implement the " +
+      "'_session/addContext' extension method. Use interruptWith() as an alternative, " +
+      "which cancels the current prompt and starts a new one."
+    );
+  }
+
+  /**
    * Set the session mode
    */
   async setMode(mode: string): Promise<void> {
@@ -108,7 +187,7 @@ export class Session {
     }
     await this.connection.setSessionMode({
       sessionId: this.id,
-      mode,
+      modeId: mode,
     });
   }
 

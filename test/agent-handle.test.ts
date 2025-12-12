@@ -67,13 +67,18 @@ describe("AgentHandle", () => {
       }),
       newSession: vi.fn().mockResolvedValue({
         sessionId: "test-session-id",
-        availableModes: [{ slug: "code" }, { slug: "ask" }],
-        availableModels: [{ id: "claude-3" }],
+        modes: {
+          availableModes: [{ id: "code" }, { id: "ask" }],
+          currentModeId: "code",
+        },
+        models: {
+          availableModels: [{ modelId: "claude-3" }],
+          currentModelId: "claude-3",
+        },
       }),
       loadSession: vi.fn().mockResolvedValue({
-        sessionId: "loaded-session-id",
-        availableModes: [],
-        availableModels: [],
+        modes: null,
+        models: null,
       }),
       setSessionMode: vi.fn().mockResolvedValue({}),
       cancel: vi.fn().mockResolvedValue({}),
@@ -217,7 +222,7 @@ describe("AgentHandle", () => {
 
       expect(mockConnection.setSessionMode).toHaveBeenCalledWith({
         sessionId: "test-session-id",
-        mode: "ask",
+        modeId: "ask",
       });
     });
 
@@ -233,12 +238,14 @@ describe("AgentHandle", () => {
   describe("loadSession", () => {
     it("should load existing session", async () => {
       const handle = await AgentHandle.create(testConfig, {});
-      const session = await handle.loadSession("existing-session");
+      const session = await handle.loadSession("existing-session", "/test/cwd");
 
       expect(mockConnection.loadSession).toHaveBeenCalledWith({
         sessionId: "existing-session",
+        cwd: "/test/cwd",
+        mcpServers: [],
       });
-      expect(session.id).toBe("loaded-session-id");
+      expect(session.id).toBe("existing-session");
     });
 
     it("should throw if agent does not support loadSession", async () => {
@@ -249,7 +256,7 @@ describe("AgentHandle", () => {
 
       const handle = await AgentHandle.create(testConfig, {});
 
-      await expect(handle.loadSession("session-id")).rejects.toThrow(
+      await expect(handle.loadSession("session-id", "/test/cwd")).rejects.toThrow(
         "Agent does not support loading sessions"
       );
     });

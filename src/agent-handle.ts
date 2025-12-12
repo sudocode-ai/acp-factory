@@ -127,7 +127,7 @@ export class AgentHandle {
     if (options.mode && this.connection.setSessionMode) {
       await this.connection.setSessionMode({
         sessionId: result.sessionId,
-        mode: options.mode,
+        modeId: options.mode,
       });
     }
 
@@ -135,29 +135,35 @@ export class AgentHandle {
       result.sessionId,
       this.connection,
       this.clientHandler,
-      result.availableModes?.map((m: { slug: string }) => m.slug) ?? [],
-      result.availableModels?.map((m: { id: string }) => m.id) ?? []
+      result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
+      result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
     );
   }
 
   /**
    * Load an existing session by ID
    */
-  async loadSession(sessionId: string): Promise<Session> {
+  async loadSession(
+    sessionId: string,
+    cwd: string,
+    mcpServers: Array<{ name: string; uri: string }> = []
+  ): Promise<Session> {
     if (!this.capabilities.loadSession) {
       throw new Error("Agent does not support loading sessions");
     }
 
     const result = await this.connection.loadSession({
       sessionId,
+      cwd,
+      mcpServers,
     });
 
     return new Session(
-      result.sessionId,
+      sessionId,
       this.connection,
       this.clientHandler,
-      result.availableModes?.map((m: { slug: string }) => m.slug) ?? [],
-      result.availableModels?.map((m: { id: string }) => m.id) ?? []
+      result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
+      result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
     );
   }
 

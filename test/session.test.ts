@@ -111,8 +111,14 @@ describe("Session", () => {
 
     it("should yield session updates", async () => {
       const updates: SessionUpdate[] = [
-        { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Hi" } },
-        { sessionUpdate: "agent_message_chunk", content: { type: "text", text: " there" } },
+        {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "Hi" },
+        },
+        {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: " there" },
+        },
       ];
 
       // The stream is created fresh each time getSessionStream is called
@@ -174,7 +180,9 @@ describe("Session", () => {
         // consume
       }
 
-      expect(mockClientHandler.endSessionStream).toHaveBeenCalledWith("test-id");
+      expect(mockClientHandler.endSessionStream).toHaveBeenCalledWith(
+        "test-id"
+      );
     });
 
     it("should handle tool_call updates", async () => {
@@ -248,7 +256,7 @@ describe("Session", () => {
 
       expect(mockConnection.setSessionMode).toHaveBeenCalledWith({
         sessionId: "test-id",
-        mode: "ask",
+        modeId: "ask",
       });
     });
 
@@ -299,7 +307,9 @@ describe("Session", () => {
     });
 
     it("should return pending permission status from clientHandler", () => {
-      mockClientHandler.getPendingPermissionIds = vi.fn().mockReturnValue(["perm-1", "perm-2"]);
+      mockClientHandler.getPendingPermissionIds = vi
+        .fn()
+        .mockReturnValue(["perm-1", "perm-2"]);
 
       const session = new Session(
         "test-id",
@@ -321,6 +331,131 @@ describe("Session", () => {
       );
 
       expect(session.hasPendingPermissions()).toBe(false);
+    });
+  });
+
+  describe("interruptWith", () => {
+    it("should cancel current prompt and start new one", async () => {
+      const updates: SessionUpdate[] = [
+        {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "New response" },
+        },
+      ];
+
+      let currentStream: Pushable<SessionUpdate>;
+      mockClientHandler.getSessionStream.mockImplementation(() => {
+        currentStream = new Pushable<SessionUpdate>();
+        return currentStream;
+      });
+
+      mockConnection.prompt.mockImplementation(() => {
+        return new Promise((resolve) => {
+          setImmediate(() => {
+            for (const update of updates) {
+              currentStream.push(update);
+            }
+            setImmediate(() => {
+              resolve({ stopReason: "end_turn" });
+            });
+          });
+        });
+      });
+
+      mockClientHandler.endSessionStream.mockImplementation(() => {
+        currentStream.end();
+      });
+
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any
+      );
+
+      const results: SessionUpdate[] = [];
+      for await (const update of session.interruptWith("New prompt")) {
+        results.push(update);
+      }
+
+      // Should have called cancel first
+      expect(mockConnection.cancel).toHaveBeenCalledWith({
+        sessionId: "test-id",
+      });
+
+      // Should have called prompt with new content
+      expect(mockConnection.prompt).toHaveBeenCalledWith({
+        sessionId: "test-id",
+        prompt: [{ type: "text", text: "New prompt" }],
+      });
+
+      expect(results).toEqual(updates);
+    });
+
+    it("should handle ContentBlock array input", async () => {
+      let currentStream: Pushable<SessionUpdate>;
+      mockClientHandler.getSessionStream.mockImplementation(() => {
+        currentStream = new Pushable<SessionUpdate>();
+        return currentStream;
+      });
+
+      mockConnection.prompt.mockImplementation(() => {
+        return new Promise((resolve) => {
+          setImmediate(() => {
+            currentStream.end();
+            resolve({ stopReason: "end_turn" });
+          });
+        });
+      });
+
+      mockClientHandler.endSessionStream.mockImplementation(() => {
+        currentStream?.end();
+      });
+
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any
+      );
+
+      const blocks = [
+        { type: "text" as const, text: "First part" },
+        { type: "text" as const, text: "Second part" },
+      ];
+
+      for await (const _ of session.interruptWith(blocks)) {
+        // consume
+      }
+
+      expect(mockConnection.prompt).toHaveBeenCalledWith({
+        sessionId: "test-id",
+        prompt: blocks,
+      });
+    });
+  });
+
+  describe("addContext", () => {
+    it("should throw error indicating feature not yet supported", async () => {
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any
+      );
+
+      await expect(session.addContext("Additional context")).rejects.toThrow(
+        "addContext() is not yet supported"
+      );
+    });
+
+    it("should mention interruptWith as alternative in error", async () => {
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any
+      );
+
+      await expect(session.addContext("test")).rejects.toThrow(
+        /interruptWith\(\)/
+      );
     });
   });
 });
