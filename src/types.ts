@@ -84,6 +84,10 @@ export type {
   InitializeRequest,
   /** Response to initialization */
   InitializeResponse,
+  /** Request to fork an existing session (UNSTABLE) */
+  ForkSessionRequest,
+  /** Response from forking a session (UNSTABLE) */
+  ForkSessionResponse,
 } from "@agentclientprotocol/sdk";
 
 /**

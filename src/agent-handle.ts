@@ -168,6 +168,32 @@ export class AgentHandle {
   }
 
   /**
+   * Fork an existing session to create a new independent session
+   *
+   * The forked session inherits the conversation history from the original,
+   * allowing operations without affecting the original session's state.
+   *
+   * @experimental This relies on the unstable session/fork ACP capability
+   */
+  async forkSession(sessionId: string): Promise<Session> {
+    if (!this.capabilities.sessionCapabilities?.fork) {
+      throw new Error("Agent does not support forking sessions");
+    }
+
+    const result = await this.connection.forkSession({
+      sessionId,
+    });
+
+    return new Session(
+      result.sessionId,
+      this.connection,
+      this.clientHandler,
+      result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
+      result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
+    );
+  }
+
+  /**
    * Close the agent connection and terminate the process
    */
   async close(): Promise<void> {

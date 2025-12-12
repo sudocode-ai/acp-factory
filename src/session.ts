@@ -192,6 +192,35 @@ export class Session {
   }
 
   /**
+   * Fork this session to create a new independent session
+   *
+   * The forked session inherits the conversation history, allowing
+   * operations like generating summaries without affecting this session.
+   *
+   * Note: This creates a new Session object - the original session
+   * remains active and can continue independently.
+   *
+   * @experimental This relies on the unstable session/fork ACP capability
+   */
+  async fork(): Promise<Session> {
+    if (!this.connection.forkSession) {
+      throw new Error("Agent does not support forking sessions");
+    }
+
+    const result = await this.connection.forkSession({
+      sessionId: this.id,
+    });
+
+    return new Session(
+      result.sessionId,
+      this.connection,
+      this.clientHandler,
+      result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
+      result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
+    );
+  }
+
+  /**
    * Respond to a permission request (for interactive permission mode)
    *
    * When using permissionMode: "interactive", permission requests are emitted

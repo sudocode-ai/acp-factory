@@ -31,6 +31,7 @@ describe("AgentHandle", () => {
     initialize: ReturnType<typeof vi.fn>;
     newSession: ReturnType<typeof vi.fn>;
     loadSession: ReturnType<typeof vi.fn>;
+    forkSession: ReturnType<typeof vi.fn>;
     setSessionMode: ReturnType<typeof vi.fn>;
     cancel: ReturnType<typeof vi.fn>;
     prompt: ReturnType<typeof vi.fn>;
@@ -79,6 +80,17 @@ describe("AgentHandle", () => {
       loadSession: vi.fn().mockResolvedValue({
         modes: null,
         models: null,
+      }),
+      forkSession: vi.fn().mockResolvedValue({
+        sessionId: "forked-session-id",
+        modes: {
+          availableModes: [{ id: "code" }, { id: "ask" }],
+          currentModeId: "code",
+        },
+        models: {
+          availableModels: [{ modelId: "claude-3" }],
+          currentModelId: "claude-3",
+        },
       }),
       setSessionMode: vi.fn().mockResolvedValue({}),
       cancel: vi.fn().mockResolvedValue({}),
@@ -259,6 +271,63 @@ describe("AgentHandle", () => {
       await expect(handle.loadSession("session-id", "/test/cwd")).rejects.toThrow(
         "Agent does not support loading sessions"
       );
+    });
+  });
+
+  describe("forkSession", () => {
+    it("should fork an existing session", async () => {
+      mockConnection.initialize.mockResolvedValue({
+        protocolVersion: 1,
+        agentCapabilities: {
+          loadSession: true,
+          sessionCapabilities: { fork: {} },
+        },
+      });
+
+      const handle = await AgentHandle.create(testConfig, {});
+      const session = await handle.forkSession("original-session");
+
+      expect(mockConnection.forkSession).toHaveBeenCalledWith({
+        sessionId: "original-session",
+      });
+      expect(session.id).toBe("forked-session-id");
+      expect(session.modes).toEqual(["code", "ask"]);
+      expect(session.models).toEqual(["claude-3"]);
+    });
+
+    it("should throw if agent does not support forking", async () => {
+      mockConnection.initialize.mockResolvedValue({
+        protocolVersion: 1,
+        agentCapabilities: { loadSession: true },
+      });
+
+      const handle = await AgentHandle.create(testConfig, {});
+
+      await expect(handle.forkSession("session-id")).rejects.toThrow(
+        "Agent does not support forking sessions"
+      );
+    });
+
+    it("should handle null modes and models in response", async () => {
+      mockConnection.initialize.mockResolvedValue({
+        protocolVersion: 1,
+        agentCapabilities: {
+          sessionCapabilities: { fork: {} },
+        },
+      });
+
+      mockConnection.forkSession.mockResolvedValue({
+        sessionId: "forked-session-id",
+        modes: null,
+        models: null,
+      });
+
+      const handle = await AgentHandle.create(testConfig, {});
+      const session = await handle.forkSession("original-session");
+
+      expect(session.id).toBe("forked-session-id");
+      expect(session.modes).toEqual([]);
+      expect(session.models).toEqual([]);
     });
   });
 

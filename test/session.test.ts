@@ -8,6 +8,7 @@ describe("Session", () => {
     prompt: ReturnType<typeof vi.fn>;
     cancel: ReturnType<typeof vi.fn>;
     setSessionMode: ReturnType<typeof vi.fn> | undefined;
+    forkSession: ReturnType<typeof vi.fn> | undefined;
   };
   let mockClientHandler: {
     getSessionStream: ReturnType<typeof vi.fn>;
@@ -22,6 +23,17 @@ describe("Session", () => {
       prompt: vi.fn(),
       cancel: vi.fn().mockResolvedValue({}),
       setSessionMode: vi.fn().mockResolvedValue({}),
+      forkSession: vi.fn().mockResolvedValue({
+        sessionId: "forked-session-id",
+        modes: {
+          availableModes: [{ id: "code" }, { id: "ask" }],
+          currentModeId: "code",
+        },
+        models: {
+          availableModels: [{ modelId: "claude-3" }],
+          currentModelId: "claude-3",
+        },
+      }),
     };
 
     mockClientHandler = {
@@ -456,6 +468,78 @@ describe("Session", () => {
       await expect(session.addContext("test")).rejects.toThrow(
         /interruptWith\(\)/
       );
+    });
+  });
+
+  describe("fork", () => {
+    it("should fork the session via connection", async () => {
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any,
+        ["code"],
+        ["claude-3"]
+      );
+
+      const forkedSession = await session.fork();
+
+      expect(mockConnection.forkSession).toHaveBeenCalledWith({
+        sessionId: "test-id",
+      });
+      expect(forkedSession.id).toBe("forked-session-id");
+      expect(forkedSession.modes).toEqual(["code", "ask"]);
+      expect(forkedSession.models).toEqual(["claude-3"]);
+    });
+
+    it("should throw if connection does not support forkSession", async () => {
+      mockConnection.forkSession = undefined;
+
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any
+      );
+
+      await expect(session.fork()).rejects.toThrow(
+        "Agent does not support forking sessions"
+      );
+    });
+
+    it("should handle null modes and models in response", async () => {
+      mockConnection.forkSession = vi.fn().mockResolvedValue({
+        sessionId: "forked-session-id",
+        modes: null,
+        models: null,
+      });
+
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any
+      );
+
+      const forkedSession = await session.fork();
+
+      expect(forkedSession.id).toBe("forked-session-id");
+      expect(forkedSession.modes).toEqual([]);
+      expect(forkedSession.models).toEqual([]);
+    });
+
+    it("should create independent session that shares connection", async () => {
+      const session = new Session(
+        "original-id",
+        mockConnection as any,
+        mockClientHandler as any
+      );
+
+      const forkedSession = await session.fork();
+
+      // Original session unchanged
+      expect(session.id).toBe("original-id");
+      // Forked session has new ID
+      expect(forkedSession.id).toBe("forked-session-id");
+      // Both share the same connection (verified by checking forkSession was called)
+      expect(mockConnection.forkSession).toHaveBeenCalledTimes(1);
     });
   });
 });
