@@ -1,0 +1,45 @@
+# Source files (dist is published instead)
+src/
+
+# Tests
+test/
+*.test.ts
+vitest.config.ts
+
+# Examples (users can find these on GitHub)
+examples/
+
+# Development files
+.git/
+.gitignore
+.eslintrc*
+.prettierrc*
+tsconfig.json
+
+# Scripts
+scripts/
+
+# References and docs
+references/
+.sudocode/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Temp files
+*.tmp
+*.temp
