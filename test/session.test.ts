@@ -8,7 +8,7 @@ describe("Session", () => {
     prompt: ReturnType<typeof vi.fn>;
     cancel: ReturnType<typeof vi.fn>;
     setSessionMode: ReturnType<typeof vi.fn> | undefined;
-    forkSession: ReturnType<typeof vi.fn> | undefined;
+    unstable_forkSession: ReturnType<typeof vi.fn> | undefined;
   };
   let mockClientHandler: {
     getSessionStream: ReturnType<typeof vi.fn>;
@@ -23,7 +23,7 @@ describe("Session", () => {
       prompt: vi.fn(),
       cancel: vi.fn().mockResolvedValue({}),
       setSessionMode: vi.fn().mockResolvedValue({}),
-      forkSession: vi.fn().mockResolvedValue({
+      unstable_forkSession: vi.fn().mockResolvedValue({
         sessionId: "forked-session-id",
         modes: {
           availableModes: [{ id: "code" }, { id: "ask" }],
@@ -43,16 +43,18 @@ describe("Session", () => {
   });
 
   describe("constructor", () => {
-    it("should store session id, modes, and models", () => {
+    it("should store session id, cwd, modes, and models", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
         mockClientHandler as any,
+        "/test/cwd",
         ["code", "ask"],
         ["claude-3", "claude-4"]
       );
 
       expect(session.id).toBe("test-id");
+      expect(session.cwd).toBe("/test/cwd");
       expect(session.modes).toEqual(["code", "ask"]);
       expect(session.models).toEqual(["claude-3", "claude-4"]);
     });
@@ -61,9 +63,11 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
+      expect(session.cwd).toBe("/test/cwd");
       expect(session.modes).toEqual([]);
       expect(session.models).toEqual([]);
     });
@@ -79,7 +83,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       // Consume the iterator
@@ -103,7 +108,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       const blocks = [
@@ -165,7 +171,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       const results: SessionUpdate[] = [];
@@ -185,7 +192,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       for await (const _ of session.prompt("test")) {
@@ -228,7 +236,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       const results: SessionUpdate[] = [];
@@ -245,7 +254,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       await session.cancel();
@@ -261,7 +271,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       await session.setMode("ask");
@@ -278,7 +289,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       await expect(session.setMode("ask")).rejects.toThrow(
@@ -295,7 +307,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       session.respondToPermission("perm-1", "allow");
@@ -310,7 +323,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       session.cancelPermission("perm-1");
@@ -326,7 +340,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       expect(session.hasPendingPermissions()).toBe(true);
@@ -339,7 +354,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       expect(session.hasPendingPermissions()).toBe(false);
@@ -381,7 +397,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       const results: SessionUpdate[] = [];
@@ -426,7 +443,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       const blocks = [
@@ -450,7 +468,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       await expect(session.addContext("Additional context")).rejects.toThrow(
@@ -462,7 +481,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       await expect(session.addContext("test")).rejects.toThrow(
@@ -477,27 +497,31 @@ describe("Session", () => {
         "test-id",
         mockConnection as any,
         mockClientHandler as any,
+        "/test/cwd",
         ["code"],
         ["claude-3"]
       );
 
       const forkedSession = await session.fork();
 
-      expect(mockConnection.forkSession).toHaveBeenCalledWith({
+      expect(mockConnection.unstable_forkSession).toHaveBeenCalledWith({
         sessionId: "test-id",
+        cwd: "/test/cwd",
       });
       expect(forkedSession.id).toBe("forked-session-id");
+      expect(forkedSession.cwd).toBe("/test/cwd");
       expect(forkedSession.modes).toEqual(["code", "ask"]);
       expect(forkedSession.models).toEqual(["claude-3"]);
     });
 
-    it("should throw if connection does not support forkSession", async () => {
-      mockConnection.forkSession = undefined;
+    it("should throw if connection does not support unstable_forkSession", async () => {
+      mockConnection.unstable_forkSession = undefined;
 
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       await expect(session.fork()).rejects.toThrow(
@@ -506,7 +530,7 @@ describe("Session", () => {
     });
 
     it("should handle null modes and models in response", async () => {
-      mockConnection.forkSession = vi.fn().mockResolvedValue({
+      mockConnection.unstable_forkSession = vi.fn().mockResolvedValue({
         sessionId: "forked-session-id",
         modes: null,
         models: null,
@@ -515,7 +539,8 @@ describe("Session", () => {
       const session = new Session(
         "test-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       const forkedSession = await session.fork();
@@ -529,7 +554,8 @@ describe("Session", () => {
       const session = new Session(
         "original-id",
         mockConnection as any,
-        mockClientHandler as any
+        mockClientHandler as any,
+        "/test/cwd"
       );
 
       const forkedSession = await session.fork();
@@ -538,8 +564,10 @@ describe("Session", () => {
       expect(session.id).toBe("original-id");
       // Forked session has new ID
       expect(forkedSession.id).toBe("forked-session-id");
-      // Both share the same connection (verified by checking forkSession was called)
-      expect(mockConnection.forkSession).toHaveBeenCalledTimes(1);
+      // Forked session inherits cwd
+      expect(forkedSession.cwd).toBe("/test/cwd");
+      // Both share the same connection (verified by checking unstable_forkSession was called)
+      expect(mockConnection.unstable_forkSession).toHaveBeenCalledTimes(1);
     });
   });
 });

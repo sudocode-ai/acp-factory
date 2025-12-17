@@ -135,6 +135,7 @@ export class AgentHandle {
       result.sessionId,
       this.connection,
       this.clientHandler,
+      cwd,
       result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
       result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
     );
@@ -162,6 +163,7 @@ export class AgentHandle {
       sessionId,
       this.connection,
       this.clientHandler,
+      cwd,
       result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
       result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
     );
@@ -175,19 +177,21 @@ export class AgentHandle {
    *
    * @experimental This relies on the unstable session/fork ACP capability
    */
-  async forkSession(sessionId: string): Promise<Session> {
+  async forkSession(sessionId: string, cwd: string): Promise<Session> {
     if (!this.capabilities.sessionCapabilities?.fork) {
       throw new Error("Agent does not support forking sessions");
     }
 
-    const result = await this.connection.forkSession({
+    const result = await this.connection.unstable_forkSession({
       sessionId,
+      cwd,
     });
 
     return new Session(
       result.sessionId,
       this.connection,
       this.clientHandler,
+      cwd,
       result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
       result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
     );

@@ -11,6 +11,7 @@ import type { ACPClientHandler } from "./client-handler.js";
  */
 export class Session {
   readonly id: string;
+  readonly cwd: string;
   readonly modes: string[];
   readonly models: string[];
 
@@ -21,12 +22,14 @@ export class Session {
     id: string,
     connection: acp.ClientSideConnection,
     clientHandler: ACPClientHandler,
+    cwd: string,
     modes: string[] = [],
     models: string[] = []
   ) {
     this.id = id;
     this.connection = connection;
     this.clientHandler = clientHandler;
+    this.cwd = cwd;
     this.modes = modes;
     this.models = models;
   }
@@ -203,18 +206,20 @@ export class Session {
    * @experimental This relies on the unstable session/fork ACP capability
    */
   async fork(): Promise<Session> {
-    if (!this.connection.forkSession) {
+    if (!this.connection.unstable_forkSession) {
       throw new Error("Agent does not support forking sessions");
     }
 
-    const result = await this.connection.forkSession({
+    const result = await this.connection.unstable_forkSession({
       sessionId: this.id,
+      cwd: this.cwd,
     });
 
     return new Session(
       result.sessionId,
       this.connection,
       this.clientHandler,
+      this.cwd,
       result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
       result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
     );

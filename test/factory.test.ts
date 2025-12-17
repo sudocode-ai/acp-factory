@@ -189,7 +189,7 @@ describe("AgentFactory", () => {
 
       expect(config).toBeDefined();
       expect(config?.command).toBe("npx");
-      expect(config?.args).toContain("@zed-industries/claude-code-acp");
+      expect(config?.args).toContain("@sudocode-ai/claude-code-acp");
     });
 
     it("should be spawnable", async () => {

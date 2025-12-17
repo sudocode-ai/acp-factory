@@ -73,4 +73,6 @@ export type {
   PromptResponse,
   InitializeRequest,
   InitializeResponse,
+  ForkSessionRequest,
+  ForkSessionResponse,
 } from "./types.js";
