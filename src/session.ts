@@ -2,6 +2,8 @@
  * Session - High-level interface for interacting with an agent session
  */
 
+import * as path from "node:path";
+import * as os from "node:os";
 import type * as acp from "@agentclientprotocol/sdk";
 import type { PromptContent, ExtendedSessionUpdate } from "./types.js";
 import type { ACPClientHandler } from "./client-handler.js";
@@ -262,5 +264,23 @@ export class Session {
    */
   getPendingPermissionIds(): string[] {
     return this.clientHandler.getPendingPermissionIds(this.id);
+  }
+
+  /**
+   * Get the file path where Claude Code stores session data
+   *
+   * Claude Code stores sessions at:
+   * ~/.claude/projects/<cwd-hash>/<sessionId>.jsonl
+   *
+   * Where <cwd-hash> is the cwd with `/` replaced by `-`
+   * (e.g., `/private/tmp` → `-private-tmp`)
+   *
+   * @param sessionId - The session ID to get the file path for
+   * @returns The absolute path to the session file
+   * @internal
+   */
+  getSessionFilePath(sessionId: string): string {
+    const cwdHash = this.cwd.replace(/\//g, "-");
+    return path.join(os.homedir(), ".claude", "projects", cwdHash, `${sessionId}.jsonl`);
   }
 }
