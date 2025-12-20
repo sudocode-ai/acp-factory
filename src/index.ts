@@ -51,6 +51,13 @@ export type {
   ExtendedSessionUpdate,
 } from "./types.js";
 
+// Session flush and fork types
+export type {
+  FlushOptions,
+  FlushResult,
+  ForkSessionOptions,
+} from "./types.js";
+
 // Re-export ACP types - Terminals
 export type {
   CreateTerminalRequest,

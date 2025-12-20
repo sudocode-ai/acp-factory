@@ -2,8 +2,11 @@
  * Session - High-level interface for interacting with an agent session
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import type * as acp from "@agentclientprotocol/sdk";
-import type { PromptContent, ExtendedSessionUpdate } from "./types.js";
+import type { PromptContent, ExtendedSessionUpdate, FlushOptions, FlushResult } from "./types.js";
 import type { ACPClientHandler } from "./client-handler.js";
 
 /**
@@ -17,6 +20,12 @@ export class Session {
 
   private readonly connection: acp.ClientSideConnection;
   private readonly clientHandler: ACPClientHandler;
+
+  /**
+   * Whether the session is currently processing a prompt
+   * @internal
+   */
+  isProcessing: boolean = false;
 
   constructor(
     id: string,
@@ -41,6 +50,9 @@ export class Session {
    * that require a response via respondToPermission() before the prompt can continue.
    */
   async *prompt(content: PromptContent): AsyncIterable<ExtendedSessionUpdate> {
+    // Mark session as processing
+    this.isProcessing = true;
+
     // Convert string to ContentBlock array
     const promptBlocks: acp.ContentBlock[] =
       typeof content === "string"
@@ -88,8 +100,9 @@ export class Session {
         }
       }
     } finally {
-      // Ensure stream is ended
+      // Ensure stream is ended and mark session as idle
       this.clientHandler.endSessionStream(this.id);
+      this.isProcessing = false;
     }
   }
 
@@ -226,6 +239,83 @@ export class Session {
   }
 
   /**
+   * Fork a running session by flushing it to disk first
+   *
+   * This method handles forking a session that is currently active by:
+   * 1. Waiting for the session to become idle (up to idleTimeout)
+   * 2. If still processing after timeout, interrupting gracefully
+   * 3. Calling the agent's flush extension to trigger disk persistence
+   * 4. Waiting for the session file to appear on disk
+   * 5. Restarting the original session so it can continue
+   * 6. Creating the forked session using the persisted data
+   *
+   * Use this when you need to fork a session that may be actively processing.
+   * For idle sessions where you know the data is already persisted, use fork() directly.
+   *
+   * @param options - Optional timeout configuration
+   * @param options.idleTimeout - Max time to wait for session to become idle (default: 5000ms)
+   * @param options.persistTimeout - Max time to wait for disk persistence (default: 5000ms)
+   * @returns A new Session object representing the forked session
+   * @throws Error if the session cannot be persisted or forked
+   *
+   * @example
+   * ```typescript
+   * // Fork a potentially active session
+   * const forkedSession = await session.forkWithFlush();
+   * // Original session continues working, forked session has full context
+   * ```
+   *
+   * @experimental This relies on the unstable session/fork ACP capability
+   */
+  async forkWithFlush(options: FlushOptions = {}): Promise<Session> {
+    const { idleTimeout = 5000, persistTimeout = 5000 } = options;
+
+    if (!this.connection.unstable_forkSession) {
+      throw new Error("Agent does not support forking sessions");
+    }
+
+    // Step 1: Wait for idle or interrupt
+    const becameIdle = await this.waitForIdle(idleTimeout);
+    if (!becameIdle && this.isProcessing) {
+      // Interrupt current operation gracefully
+      await this.cancel();
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Step 2: Call the agent's flush extension method to trigger persistence
+    await (this.connection as unknown as { extMethod: (method: string, params: Record<string, unknown>) => Promise<unknown> })
+      .extMethod("_session/flush", {
+        sessionId: this.id,
+        idleTimeout,
+        persistTimeout,
+      });
+
+    // Step 3: Wait for persistence
+    const persisted = await this.waitForPersistence(this.id, persistTimeout);
+    if (!persisted) {
+      throw new Error(`Failed to persist session ${this.id} to disk`);
+    }
+
+    // Step 4: Restart original session so it can continue working
+    await this.restartSession();
+
+    // Step 5: Create forked session using existing fork logic
+    const result = await this.connection.unstable_forkSession({
+      sessionId: this.id,
+      cwd: this.cwd,
+    });
+
+    return new Session(
+      result.sessionId,
+      this.connection,
+      this.clientHandler,
+      this.cwd,
+      result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
+      result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
+    );
+  }
+
+  /**
    * Respond to a permission request (for interactive permission mode)
    *
    * When using permissionMode: "interactive", permission requests are emitted
@@ -262,5 +352,171 @@ export class Session {
    */
   getPendingPermissionIds(): string[] {
     return this.clientHandler.getPendingPermissionIds(this.id);
+  }
+
+  /**
+   * Get the file path where Claude Code stores session data
+   *
+   * Claude Code stores sessions at:
+   * ~/.claude/projects/<cwd-hash>/<sessionId>.jsonl
+   *
+   * Where <cwd-hash> is the cwd with `/` replaced by `-`
+   * (e.g., `/private/tmp` → `-private-tmp`)
+   *
+   * @param sessionId - The session ID to get the file path for
+   * @returns The absolute path to the session file
+   * @internal
+   */
+  getSessionFilePath(sessionId: string): string {
+    // Resolve the real path to handle macOS symlinks like /var -> /private/var
+    // Claude Code uses the resolved path internally
+    const realCwd = fs.realpathSync(this.cwd);
+    // Claude Code replaces both / and _ with - in the cwd hash
+    const cwdHash = realCwd.replace(/[/_]/g, "-");
+    return path.join(os.homedir(), ".claude", "projects", cwdHash, `${sessionId}.jsonl`);
+  }
+
+  /**
+   * Wait for session data to be persisted to disk
+   *
+   * Polls for the session file existence every 100ms until the file appears
+   * or the timeout expires.
+   *
+   * @param sessionId - The session ID to wait for
+   * @param timeout - Maximum time to wait in milliseconds (default: 5000ms)
+   * @returns true if file appears within timeout, false if timeout expires
+   * @internal
+   */
+  async waitForPersistence(sessionId: string, timeout: number = 5000): Promise<boolean> {
+    const filePath = this.getSessionFilePath(sessionId);
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      if (fs.existsSync(filePath)) {
+        return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    return false;
+  }
+
+  /**
+   * Wait for the session to become idle (not processing a prompt)
+   *
+   * Polls the session's isProcessing state every 100ms until the session
+   * becomes idle or the timeout expires.
+   *
+   * @param timeout - Maximum time to wait in milliseconds (default: 5000ms)
+   * @returns true if session becomes idle within timeout, false if timeout expires
+   * @internal
+   */
+  async waitForIdle(timeout: number = 5000): Promise<boolean> {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      if (!this.isProcessing) {
+        return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    return false;
+  }
+
+  /**
+   * Flush session to disk, creating a checkpoint without forking
+   *
+   * This method triggers persistence of the session data by:
+   * 1. Waiting for the session to become idle (or timing out)
+   * 2. Cancelling any in-progress work if still busy
+   * 3. Calling the agent's _session/flush extension method
+   * 4. Waiting for the session file to appear on disk
+   * 5. Restarting the session so it can continue working
+   *
+   * Use this for creating checkpoints that can later be forked or restored.
+   *
+   * @param options - Optional timeout configuration
+   * @param options.idleTimeout - Max time to wait for session to become idle (default: 5000ms)
+   * @param options.persistTimeout - Max time to wait for disk persistence (default: 5000ms)
+   * @returns Object with success status, file path if successful, or error message
+   *
+   * @example
+   * ```typescript
+   * const result = await session.flush();
+   * if (result.success) {
+   *   console.log(`Session saved to ${result.filePath}`);
+   * } else {
+   *   console.error(`Flush failed: ${result.error}`);
+   * }
+   * ```
+   */
+  async flush(options: FlushOptions = {}): Promise<FlushResult> {
+    const { idleTimeout = 5000, persistTimeout = 5000 } = options;
+
+    try {
+      // Wait for idle or timeout
+      const becameIdle = await this.waitForIdle(idleTimeout);
+      if (!becameIdle && this.isProcessing) {
+        // Interrupt if still busy
+        await this.cancel();
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      // Call the agent's flush extension method to trigger persistence
+      await (this.connection as unknown as { extMethod: (method: string, params: Record<string, unknown>) => Promise<unknown> })
+        .extMethod("_session/flush", {
+          sessionId: this.id,
+          idleTimeout,
+          persistTimeout,
+        });
+
+      // Wait for persistence
+      const persisted = await this.waitForPersistence(this.id, persistTimeout);
+      if (!persisted) {
+        return { success: false, error: "Timeout waiting for persistence" };
+      }
+
+      // Restart session so it can continue working
+      await this.restartSession();
+
+      return {
+        success: true,
+        filePath: this.getSessionFilePath(this.id),
+      };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  }
+
+  /**
+   * Restart this session after it has been flushed to disk
+   *
+   * This method is used as part of the fork-with-flush mechanism. After a session
+   * has been aborted to trigger disk persistence, this method restarts the session
+   * by loading it from the persisted state.
+   *
+   * The restarted session will have the same sessionId and conversation history,
+   * but with fresh internal state (new input stream, reset flags).
+   *
+   * @returns A new Session object representing the restarted session
+   * @throws Error if the agent does not support loading sessions
+   * @internal
+   */
+  async restartSession(): Promise<Session> {
+    if (!this.connection.loadSession) {
+      throw new Error("Agent does not support restarting sessions");
+    }
+
+    const result = await this.connection.loadSession({
+      sessionId: this.id,
+      cwd: this.cwd,
+      mcpServers: [],
+    });
+
+    return new Session(
+      this.id,
+      this.connection,
+      this.clientHandler,
+      this.cwd,
+      result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? this.modes,
+      result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? this.models
+    );
   }
 }

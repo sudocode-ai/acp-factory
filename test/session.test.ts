@@ -570,4 +570,62 @@ describe("Session", () => {
       expect(mockConnection.unstable_forkSession).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe("getSessionFilePath", () => {
+    it("should compute correct path with cwd hash", () => {
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any,
+        "/private/tmp"
+      );
+
+      const filePath = session.getSessionFilePath("abc123");
+      const homeDir = require("os").homedir();
+
+      expect(filePath).toBe(`${homeDir}/.claude/projects/-private-tmp/abc123.jsonl`);
+    });
+
+    it("should handle deeply nested cwd paths", () => {
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any,
+        "/Users/alex/projects/myapp"
+      );
+
+      const filePath = session.getSessionFilePath("session-xyz");
+      const homeDir = require("os").homedir();
+
+      expect(filePath).toBe(`${homeDir}/.claude/projects/-Users-alex-projects-myapp/session-xyz.jsonl`);
+    });
+
+    it("should handle root cwd", () => {
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any,
+        "/"
+      );
+
+      const filePath = session.getSessionFilePath("root-session");
+      const homeDir = require("os").homedir();
+
+      expect(filePath).toBe(`${homeDir}/.claude/projects/-/root-session.jsonl`);
+    });
+
+    it("should use session id from parameter not session.id", () => {
+      const session = new Session(
+        "original-session-id",
+        mockConnection as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      const filePath = session.getSessionFilePath("different-session-id");
+      const homeDir = require("os").homedir();
+
+      expect(filePath).toBe(`${homeDir}/.claude/projects/-test-cwd/different-session-id.jsonl`);
+    });
+  });
 });
