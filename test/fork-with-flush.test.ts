@@ -42,6 +42,20 @@ describe("Fork-with-flush helpers", () => {
   });
 
   describe("getSessionFilePath", () => {
+    let testTempDir: string;
+
+    beforeEach(() => {
+      // Create a temp directory for tests that need real paths
+      testTempDir = fs.mkdtempSync(path.join(os.tmpdir(), "session-path-test-"));
+    });
+
+    afterEach(() => {
+      // Cleanup temp directory
+      if (testTempDir && fs.existsSync(testTempDir)) {
+        fs.rmSync(testTempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should compute correct path with cwd hash", () => {
       const session = new Session(
         "test-id",
@@ -57,17 +71,24 @@ describe("Fork-with-flush helpers", () => {
     });
 
     it("should handle deeply nested cwd paths", () => {
+      // Create nested directories to test path hashing
+      const nestedDir = path.join(testTempDir, "deeply", "nested", "path");
+      fs.mkdirSync(nestedDir, { recursive: true });
+
       const session = new Session(
         "test-id",
         mockConnection as any,
         mockClientHandler as any,
-        "/Users/alex/projects/myapp"
+        nestedDir
       );
 
       const filePath = session.getSessionFilePath("session-xyz");
       const homeDir = os.homedir();
+      // The real path should be hashed with / and _ replaced by -
+      const realPath = fs.realpathSync(nestedDir);
+      const expectedHash = realPath.replace(/[/_]/g, "-");
 
-      expect(filePath).toBe(`${homeDir}/.claude/projects/-Users-alex-projects-myapp/session-xyz.jsonl`);
+      expect(filePath).toBe(`${homeDir}/.claude/projects/${expectedHash}/session-xyz.jsonl`);
     });
 
     it("should handle root cwd", () => {
@@ -89,27 +110,35 @@ describe("Fork-with-flush helpers", () => {
         "original-session-id",
         mockConnection as any,
         mockClientHandler as any,
-        "/test/cwd"
+        testTempDir
       );
 
       const filePath = session.getSessionFilePath("different-session-id");
       const homeDir = os.homedir();
+      const realPath = fs.realpathSync(testTempDir);
+      const expectedHash = realPath.replace(/[/_]/g, "-");
 
-      expect(filePath).toBe(`${homeDir}/.claude/projects/-test-cwd/different-session-id.jsonl`);
+      expect(filePath).toBe(`${homeDir}/.claude/projects/${expectedHash}/different-session-id.jsonl`);
     });
 
     it("should handle paths with special characters", () => {
+      // Create directory with underscore to test _ replacement
+      const specialDir = path.join(testTempDir, "my_project", "src");
+      fs.mkdirSync(specialDir, { recursive: true });
+
       const session = new Session(
         "test-id",
         mockConnection as any,
         mockClientHandler as any,
-        "/Users/my-user/my_project/src"
+        specialDir
       );
 
       const filePath = session.getSessionFilePath("test-session");
       const homeDir = os.homedir();
+      const realPath = fs.realpathSync(specialDir);
+      const expectedHash = realPath.replace(/[/_]/g, "-");
 
-      expect(filePath).toBe(`${homeDir}/.claude/projects/-Users-my-user-my_project-src/test-session.jsonl`);
+      expect(filePath).toBe(`${homeDir}/.claude/projects/${expectedHash}/test-session.jsonl`);
     });
   });
 
@@ -306,17 +335,19 @@ describe("Fork-with-flush helpers", () => {
       expect(elapsed).toBeLessThan(500);
     });
 
-    it("should handle missing parent directories gracefully", async () => {
+    it("should handle missing session file gracefully", async () => {
+      // Use a real temp directory but with a nonexistent session file
       const session = new Session(
         "test-id",
         mockConnection as any,
         mockClientHandler as any,
-        "/nonexistent/deeply/nested/path"
+        tempDir
       );
 
-      const sessionId = "missing-parent-session";
+      const sessionId = "missing-session-file";
 
       // Should not throw, just return false after timeout
+      // The session file doesn't exist but the cwd is valid
       const result = await session.waitForPersistence(sessionId, 200);
 
       expect(result).toBe(false);
@@ -528,7 +559,8 @@ describe("Fork-with-flush helpers", () => {
     });
 
     it("should wait for idle before flushing", async () => {
-      const extMethodMock = vi.fn().mockResolvedValue({});
+      const filePath = path.join(os.homedir(), ".claude", "projects", tempDir.replace(/[/_]/g, "-"), "test-session.jsonl");
+      const extMethodMock = vi.fn().mockResolvedValue({ success: true, filePath });
       const connectionWithFork = {
         ...mockConnection,
         unstable_forkSession: vi.fn().mockResolvedValue({
@@ -546,11 +578,6 @@ describe("Fork-with-flush helpers", () => {
         tempDir
       );
 
-      // Create session file immediately (simulating persistence)
-      const filePath = session.getSessionFilePath("test-session");
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, '{"test": true}\n');
-
       // Session is not processing
       expect(session.isProcessing).toBe(false);
 
@@ -562,14 +589,12 @@ describe("Fork-with-flush helpers", () => {
         persistTimeout: 5000,
       });
       expect(forkedSession.id).toBe("forked-session");
-
-      // Cleanup
-      fs.rmSync(path.dirname(filePath), { recursive: true, force: true });
     });
 
     it("should cancel and wait if session is processing after idle timeout", async () => {
       const cancelMock = vi.fn().mockResolvedValue({});
-      const extMethodMock = vi.fn().mockResolvedValue({});
+      const filePath = path.join(os.homedir(), ".claude", "projects", tempDir.replace(/[/_]/g, "-"), "test-session.jsonl");
+      const extMethodMock = vi.fn().mockResolvedValue({ success: true, filePath });
       const connectionWithFork = {
         ...mockConnection,
         cancel: cancelMock,
@@ -591,11 +616,6 @@ describe("Fork-with-flush helpers", () => {
       // Simulate session is processing
       session.isProcessing = true;
 
-      // Create session file immediately (simulating persistence)
-      const filePath = session.getSessionFilePath("test-session");
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, '{"test": true}\n');
-
       const start = Date.now();
       await session.forkWithFlush({ idleTimeout: 100 });
       const elapsed = Date.now() - start;
@@ -604,13 +624,11 @@ describe("Fork-with-flush helpers", () => {
       expect(cancelMock).toHaveBeenCalledWith({ sessionId: "test-session" });
       // Should have waited at least the idle timeout + cancel settle time
       expect(elapsed).toBeGreaterThanOrEqual(100);
-
-      // Cleanup
-      fs.rmSync(path.dirname(filePath), { recursive: true, force: true });
     });
 
     it("should throw if persistence times out", async () => {
-      const extMethodMock = vi.fn().mockResolvedValue({});
+      // Agent returns failure when persistence times out
+      const extMethodMock = vi.fn().mockResolvedValue({ success: false, error: "Timeout waiting for persistence" });
       const connectionWithFork = {
         ...mockConnection,
         unstable_forkSession: vi.fn().mockResolvedValue({
@@ -628,15 +646,14 @@ describe("Fork-with-flush helpers", () => {
         tempDir
       );
 
-      // Don't create the session file - persistence will timeout
-
       await expect(session.forkWithFlush({ idleTimeout: 100, persistTimeout: 200 })).rejects.toThrow(
-        "Failed to persist session test-session to disk"
+        "Timeout waiting for persistence"
       );
     });
 
     it("should restart original session and return forked session", async () => {
-      const extMethodMock = vi.fn().mockResolvedValue({});
+      const filePath = path.join(os.homedir(), ".claude", "projects", tempDir.replace(/[/_]/g, "-"), "original-session.jsonl");
+      const extMethodMock = vi.fn().mockResolvedValue({ success: true, filePath });
       const connectionWithFork = {
         ...mockConnection,
         unstable_forkSession: vi.fn().mockResolvedValue({
@@ -653,11 +670,6 @@ describe("Fork-with-flush helpers", () => {
         mockClientHandler as any,
         tempDir
       );
-
-      // Create session file
-      const filePath = session.getSessionFilePath("original-session");
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, '{"test": true}\n');
 
       const forkedSession = await session.forkWithFlush();
 
@@ -679,13 +691,12 @@ describe("Fork-with-flush helpers", () => {
       expect(forkedSession.cwd).toBe(tempDir);
       expect(forkedSession.modes).toEqual(["code", "ask"]);
       expect(forkedSession.models).toEqual(["claude-4"]);
-
-      // Cleanup
-      fs.rmSync(path.dirname(filePath), { recursive: true, force: true });
     });
 
     it("should use default timeouts when not specified", async () => {
-      const extMethodMock = vi.fn().mockResolvedValue({});
+      // Agent returns success with filePath
+      const filePath = path.join(os.homedir(), ".claude", "projects", tempDir.replace(/[/_]/g, "-"), "test-session.jsonl");
+      const extMethodMock = vi.fn().mockResolvedValue({ success: true, filePath });
       const connectionWithFork = {
         ...mockConnection,
         unstable_forkSession: vi.fn().mockResolvedValue({
@@ -703,11 +714,6 @@ describe("Fork-with-flush helpers", () => {
         tempDir
       );
 
-      // Create session file immediately
-      const filePath = session.getSessionFilePath("test-session");
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, '{"test": true}\n');
-
       // Should complete without error using default timeouts
       const forkedSession = await session.forkWithFlush();
 
@@ -715,9 +721,6 @@ describe("Fork-with-flush helpers", () => {
       // Empty arrays when modes/models are null
       expect(forkedSession.modes).toEqual([]);
       expect(forkedSession.models).toEqual([]);
-
-      // Cleanup
-      fs.rmSync(path.dirname(filePath), { recursive: true, force: true });
     });
 
     it("should propagate flush extension method errors", async () => {
@@ -739,7 +742,9 @@ describe("Fork-with-flush helpers", () => {
     });
 
     it("should propagate fork errors after successful flush", async () => {
-      const extMethodMock = vi.fn().mockResolvedValue({});
+      // Agent returns success with filePath
+      const filePath = path.join(os.homedir(), ".claude", "projects", tempDir.replace(/[/_]/g, "-"), "test-session.jsonl");
+      const extMethodMock = vi.fn().mockResolvedValue({ success: true, filePath });
       const connectionWithFork = {
         ...mockConnection,
         unstable_forkSession: vi.fn().mockRejectedValue(new Error("Fork failed")),
@@ -753,15 +758,7 @@ describe("Fork-with-flush helpers", () => {
         tempDir
       );
 
-      // Create session file
-      const filePath = session.getSessionFilePath("test-session");
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, '{"test": true}\n');
-
       await expect(session.forkWithFlush()).rejects.toThrow("Fork failed");
-
-      // Cleanup
-      fs.rmSync(path.dirname(filePath), { recursive: true, force: true });
     });
   });
 
@@ -777,7 +774,9 @@ describe("Fork-with-flush helpers", () => {
     });
 
     it("should pass timeout options to extension method", async () => {
-      const extMethodMock = vi.fn().mockResolvedValue({});
+      // Agent handles persistence and returns success
+      const filePath = path.join(os.homedir(), ".claude", "projects", tempDir.replace(/[/_]/g, "-"), "test-session.jsonl");
+      const extMethodMock = vi.fn().mockResolvedValue({ success: true, filePath });
       const connectionWithExtMethod = {
         ...mockConnection,
         extMethod: extMethodMock,
@@ -789,11 +788,6 @@ describe("Fork-with-flush helpers", () => {
         mockClientHandler as any,
         tempDir
       );
-
-      // Create session file immediately (simulating persistence)
-      const filePath = session.getSessionFilePath("test-session");
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, '{"test": true}\n');
 
       await session.flush({ idleTimeout: 1000, persistTimeout: 2000 });
 
@@ -802,13 +796,12 @@ describe("Fork-with-flush helpers", () => {
         idleTimeout: 1000,
         persistTimeout: 2000,
       });
-
-      // Cleanup
-      fs.rmSync(path.dirname(filePath), { recursive: true, force: true });
     });
 
     it("should use default timeouts when not specified", async () => {
-      const extMethodMock = vi.fn().mockResolvedValue({});
+      // Agent handles persistence and returns success
+      const filePath = path.join(os.homedir(), ".claude", "projects", tempDir.replace(/[/_]/g, "-"), "test-session.jsonl");
+      const extMethodMock = vi.fn().mockResolvedValue({ success: true, filePath });
       const connectionWithExtMethod = {
         ...mockConnection,
         extMethod: extMethodMock,
@@ -820,11 +813,6 @@ describe("Fork-with-flush helpers", () => {
         mockClientHandler as any,
         tempDir
       );
-
-      // Create session file immediately (simulating persistence)
-      const filePath = session.getSessionFilePath("test-session");
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, '{"test": true}\n');
 
       await session.flush();
 
@@ -833,13 +821,12 @@ describe("Fork-with-flush helpers", () => {
         idleTimeout: 5000,
         persistTimeout: 5000,
       });
-
-      // Cleanup
-      fs.rmSync(path.dirname(filePath), { recursive: true, force: true });
     });
 
     it("should return success with filePath on successful flush", async () => {
-      const extMethodMock = vi.fn().mockResolvedValue({});
+      // Agent handles persistence and returns success with filePath
+      const filePath = path.join(os.homedir(), ".claude", "projects", tempDir.replace(/[/_]/g, "-"), "test-session.jsonl");
+      const extMethodMock = vi.fn().mockResolvedValue({ success: true, filePath });
       const connectionWithExtMethod = {
         ...mockConnection,
         extMethod: extMethodMock,
@@ -851,24 +838,17 @@ describe("Fork-with-flush helpers", () => {
         mockClientHandler as any,
         tempDir
       );
-
-      // Create session file
-      const filePath = session.getSessionFilePath("test-session");
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, '{"test": true}\n');
 
       const result = await session.flush();
 
       expect(result.success).toBe(true);
       expect(result.filePath).toBe(filePath);
       expect(result.error).toBeUndefined();
-
-      // Cleanup
-      fs.rmSync(path.dirname(filePath), { recursive: true, force: true });
     });
 
     it("should return failure with error when persistence times out", async () => {
-      const extMethodMock = vi.fn().mockResolvedValue({});
+      // Agent returns failure when persistence times out
+      const extMethodMock = vi.fn().mockResolvedValue({ success: false, error: "Timeout waiting for persistence" });
       const connectionWithExtMethod = {
         ...mockConnection,
         extMethod: extMethodMock,
@@ -881,19 +861,10 @@ describe("Fork-with-flush helpers", () => {
         tempDir
       );
 
-      // Don't create session file - persistence will timeout
-
       const result = await session.flush({ persistTimeout: 200 });
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Timeout waiting for persistence");
-
-      // Cleanup any created directories
-      const filePath = session.getSessionFilePath("test-session");
-      const parentDir = path.dirname(filePath);
-      if (fs.existsSync(parentDir)) {
-        fs.rmSync(parentDir, { recursive: true, force: true });
-      }
     });
 
     it("should return failure with error when extension method throws", async () => {

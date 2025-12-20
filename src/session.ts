@@ -283,23 +283,23 @@ export class Session {
     }
 
     // Step 2: Call the agent's flush extension method to trigger persistence
-    await (this.connection as unknown as { extMethod: (method: string, params: Record<string, unknown>) => Promise<unknown> })
+    // The agent handles waiting for persistence internally
+    const flushResult = await (this.connection as unknown as { extMethod: (method: string, params: Record<string, unknown>) => Promise<{ success: boolean; filePath?: string; error?: string }> })
       .extMethod("_session/flush", {
         sessionId: this.id,
         idleTimeout,
         persistTimeout,
       });
 
-    // Step 3: Wait for persistence
-    const persisted = await this.waitForPersistence(this.id, persistTimeout);
-    if (!persisted) {
-      throw new Error(`Failed to persist session ${this.id} to disk`);
+    // Check if the agent reported success
+    if (!flushResult.success) {
+      throw new Error(flushResult.error ?? `Failed to persist session ${this.id} to disk`);
     }
 
-    // Step 4: Restart original session so it can continue working
+    // Step 3: Restart original session so it can continue working
     await this.restartSession();
 
-    // Step 5: Create forked session using existing fork logic
+    // Step 4: Create forked session using existing fork logic
     const result = await this.connection.unstable_forkSession({
       sessionId: this.id,
       cwd: this.cwd,
@@ -366,6 +366,8 @@ export class Session {
    * @param sessionId - The session ID to get the file path for
    * @returns The absolute path to the session file
    * @internal
+   * @deprecated This method is Claude Code specific. The agent now returns
+   * the file path in the flush response. This method may be removed in a future version.
    */
   getSessionFilePath(sessionId: string): string {
     // Resolve the real path to handle macOS symlinks like /var -> /private/var
@@ -386,6 +388,9 @@ export class Session {
    * @param timeout - Maximum time to wait in milliseconds (default: 5000ms)
    * @returns true if file appears within timeout, false if timeout expires
    * @internal
+   * @deprecated This method is Claude Code specific and relies on getSessionFilePath().
+   * The agent now handles persistence verification internally. This method may be
+   * removed in a future version.
    */
   async waitForPersistence(sessionId: string, timeout: number = 5000): Promise<boolean> {
     const filePath = this.getSessionFilePath(sessionId);
@@ -460,17 +465,17 @@ export class Session {
       }
 
       // Call the agent's flush extension method to trigger persistence
-      await (this.connection as unknown as { extMethod: (method: string, params: Record<string, unknown>) => Promise<unknown> })
+      // The agent handles waiting for persistence and returns the result
+      const flushResult = await (this.connection as unknown as { extMethod: (method: string, params: Record<string, unknown>) => Promise<{ success: boolean; filePath?: string; error?: string }> })
         .extMethod("_session/flush", {
           sessionId: this.id,
           idleTimeout,
           persistTimeout,
         });
 
-      // Wait for persistence
-      const persisted = await this.waitForPersistence(this.id, persistTimeout);
-      if (!persisted) {
-        return { success: false, error: "Timeout waiting for persistence" };
+      // Check if the agent reported success
+      if (!flushResult.success) {
+        return { success: false, error: flushResult.error ?? "Flush failed" };
       }
 
       // Restart session so it can continue working
@@ -478,7 +483,7 @@ export class Session {
 
       return {
         success: true,
-        filePath: this.getSessionFilePath(this.id),
+        filePath: flushResult.filePath,
       };
     } catch (error) {
       return { success: false, error: String(error) };

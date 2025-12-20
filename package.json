@@ -66,7 +66,7 @@
     "@agentclientprotocol/sdk": "^0.12.0"
   },
   "peerDependencies": {
-    "@sudocode-ai/claude-code-acp": "^0.12.9"
+    "@sudocode-ai/claude-code-acp": "^0.12.10"
   },
   "peerDependenciesMeta": {
     "@sudocode-ai/claude-code-acp": {

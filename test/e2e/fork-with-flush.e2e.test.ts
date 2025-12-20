@@ -13,13 +13,13 @@
  * 1. Claude CLI installed and authenticated (`claude auth login`)
  * 2. @sudocode-ai/claude-code-acp available (or use local fork)
  *
- * Run with: RUN_E2E_TESTS=true npm run test:run -- src/__tests__/fork-with-flush.e2e.test.ts
+ * Run with: RUN_E2E_TESTS=true npm run test:run -- test/e2e/fork-with-flush.e2e.test.ts
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { AgentFactory } from "../factory.js";
-import type { AgentHandle } from "../agent-handle.js";
-import type { Session } from "../session.js";
-import type { ExtendedSessionUpdate } from "../types.js";
+import { AgentFactory } from "../../src/factory.js";
+import type { AgentHandle } from "../../src/agent-handle.js";
+import type { Session } from "../../src/session.js";
+import type { ExtendedSessionUpdate } from "../../src/types.js";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as fs from "node:fs";

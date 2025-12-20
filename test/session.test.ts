@@ -1,6 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Session } from "../src/session.js";
 import { Pushable } from "../src/client-handler.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import type { SessionUpdate } from "@agentclientprotocol/sdk";
 
 describe("Session", () => {
@@ -572,6 +575,20 @@ describe("Session", () => {
   });
 
   describe("getSessionFilePath", () => {
+    let testTempDir: string;
+
+    beforeEach(() => {
+      // Create a temp directory for tests that need real paths
+      testTempDir = fs.mkdtempSync(path.join(os.tmpdir(), "session-path-test-"));
+    });
+
+    afterEach(() => {
+      // Cleanup temp directory
+      if (testTempDir && fs.existsSync(testTempDir)) {
+        fs.rmSync(testTempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should compute correct path with cwd hash", () => {
       const session = new Session(
         "test-id",
@@ -581,23 +598,30 @@ describe("Session", () => {
       );
 
       const filePath = session.getSessionFilePath("abc123");
-      const homeDir = require("os").homedir();
+      const homeDir = os.homedir();
 
       expect(filePath).toBe(`${homeDir}/.claude/projects/-private-tmp/abc123.jsonl`);
     });
 
     it("should handle deeply nested cwd paths", () => {
+      // Create nested directories to test path hashing
+      const nestedDir = path.join(testTempDir, "deeply", "nested", "path");
+      fs.mkdirSync(nestedDir, { recursive: true });
+
       const session = new Session(
         "test-id",
         mockConnection as any,
         mockClientHandler as any,
-        "/Users/alex/projects/myapp"
+        nestedDir
       );
 
       const filePath = session.getSessionFilePath("session-xyz");
-      const homeDir = require("os").homedir();
+      const homeDir = os.homedir();
+      // The real path should be hashed with / and _ replaced by -
+      const realPath = fs.realpathSync(nestedDir);
+      const expectedHash = realPath.replace(/[/_]/g, "-");
 
-      expect(filePath).toBe(`${homeDir}/.claude/projects/-Users-alex-projects-myapp/session-xyz.jsonl`);
+      expect(filePath).toBe(`${homeDir}/.claude/projects/${expectedHash}/session-xyz.jsonl`);
     });
 
     it("should handle root cwd", () => {
@@ -609,7 +633,7 @@ describe("Session", () => {
       );
 
       const filePath = session.getSessionFilePath("root-session");
-      const homeDir = require("os").homedir();
+      const homeDir = os.homedir();
 
       expect(filePath).toBe(`${homeDir}/.claude/projects/-/root-session.jsonl`);
     });
@@ -619,13 +643,15 @@ describe("Session", () => {
         "original-session-id",
         mockConnection as any,
         mockClientHandler as any,
-        "/test/cwd"
+        testTempDir
       );
 
       const filePath = session.getSessionFilePath("different-session-id");
-      const homeDir = require("os").homedir();
+      const homeDir = os.homedir();
+      const realPath = fs.realpathSync(testTempDir);
+      const expectedHash = realPath.replace(/[/_]/g, "-");
 
-      expect(filePath).toBe(`${homeDir}/.claude/projects/-test-cwd/different-session-id.jsonl`);
+      expect(filePath).toBe(`${homeDir}/.claude/projects/${expectedHash}/different-session-id.jsonl`);
     });
   });
 });
