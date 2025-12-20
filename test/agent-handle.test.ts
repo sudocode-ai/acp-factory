@@ -31,7 +31,7 @@ describe("AgentHandle", () => {
     initialize: ReturnType<typeof vi.fn>;
     newSession: ReturnType<typeof vi.fn>;
     loadSession: ReturnType<typeof vi.fn>;
-    forkSession: ReturnType<typeof vi.fn>;
+    unstable_forkSession: ReturnType<typeof vi.fn>;
     setSessionMode: ReturnType<typeof vi.fn>;
     cancel: ReturnType<typeof vi.fn>;
     prompt: ReturnType<typeof vi.fn>;
@@ -81,7 +81,7 @@ describe("AgentHandle", () => {
         modes: null,
         models: null,
       }),
-      forkSession: vi.fn().mockResolvedValue({
+      unstable_forkSession: vi.fn().mockResolvedValue({
         sessionId: "forked-session-id",
         modes: {
           availableModes: [{ id: "code" }, { id: "ask" }],
@@ -285,12 +285,14 @@ describe("AgentHandle", () => {
       });
 
       const handle = await AgentHandle.create(testConfig, {});
-      const session = await handle.forkSession("original-session");
+      const session = await handle.forkSession("original-session", "/test/cwd");
 
-      expect(mockConnection.forkSession).toHaveBeenCalledWith({
+      expect(mockConnection.unstable_forkSession).toHaveBeenCalledWith({
         sessionId: "original-session",
+        cwd: "/test/cwd",
       });
       expect(session.id).toBe("forked-session-id");
+      expect(session.cwd).toBe("/test/cwd");
       expect(session.modes).toEqual(["code", "ask"]);
       expect(session.models).toEqual(["claude-3"]);
     });
@@ -303,7 +305,7 @@ describe("AgentHandle", () => {
 
       const handle = await AgentHandle.create(testConfig, {});
 
-      await expect(handle.forkSession("session-id")).rejects.toThrow(
+      await expect(handle.forkSession("session-id", "/test/cwd")).rejects.toThrow(
         "Agent does not support forking sessions"
       );
     });
@@ -316,18 +318,140 @@ describe("AgentHandle", () => {
         },
       });
 
-      mockConnection.forkSession.mockResolvedValue({
+      mockConnection.unstable_forkSession.mockResolvedValue({
         sessionId: "forked-session-id",
         modes: null,
         models: null,
       });
 
       const handle = await AgentHandle.create(testConfig, {});
-      const session = await handle.forkSession("original-session");
+      const session = await handle.forkSession("original-session", "/test/cwd");
 
       expect(session.id).toBe("forked-session-id");
+      expect(session.cwd).toBe("/test/cwd");
       expect(session.modes).toEqual([]);
       expect(session.models).toEqual([]);
+    });
+
+    it("should use direct fork when session is idle and tracked", async () => {
+      mockConnection.initialize.mockResolvedValue({
+        protocolVersion: 1,
+        agentCapabilities: {
+          loadSession: true,
+          sessionCapabilities: { fork: {} },
+        },
+      });
+
+      const handle = await AgentHandle.create(testConfig, {});
+
+      // Create a session first (this tracks it in the handle)
+      const originalSession = await handle.createSession("/test/cwd");
+      expect(originalSession.isProcessing).toBe(false);
+
+      // Fork the tracked, idle session
+      const forkedSession = await handle.forkSession(originalSession.id, "/test/cwd");
+
+      // Should use direct fork (unstable_forkSession), not forkWithFlush
+      expect(mockConnection.unstable_forkSession).toHaveBeenCalledWith({
+        sessionId: originalSession.id,
+        cwd: "/test/cwd",
+      });
+      expect(forkedSession.id).toBe("forked-session-id");
+    });
+
+    it("should use direct fork when session is not tracked", async () => {
+      mockConnection.initialize.mockResolvedValue({
+        protocolVersion: 1,
+        agentCapabilities: {
+          loadSession: true,
+          sessionCapabilities: { fork: {} },
+        },
+      });
+
+      const handle = await AgentHandle.create(testConfig, {});
+
+      // Fork a session that is not tracked (e.g., from a previous process)
+      const forkedSession = await handle.forkSession("untracked-session", "/test/cwd");
+
+      // Should use direct fork since we can't use forkWithFlush without the Session object
+      expect(mockConnection.unstable_forkSession).toHaveBeenCalledWith({
+        sessionId: "untracked-session",
+        cwd: "/test/cwd",
+      });
+      expect(forkedSession.id).toBe("forked-session-id");
+    });
+
+    it("should track forked session in sessions map", async () => {
+      mockConnection.initialize.mockResolvedValue({
+        protocolVersion: 1,
+        agentCapabilities: {
+          loadSession: true,
+          sessionCapabilities: { fork: {} },
+        },
+      });
+
+      const handle = await AgentHandle.create(testConfig, {});
+
+      // Fork a session
+      const forkedSession = await handle.forkSession("original-session", "/test/cwd");
+
+      // Fork the forked session (this verifies it was tracked)
+      mockConnection.unstable_forkSession.mockResolvedValue({
+        sessionId: "double-forked-id",
+        modes: null,
+        models: null,
+      });
+
+      const doubleForkedSession = await handle.forkSession(forkedSession.id, "/test/cwd");
+
+      // Should work because forked session was tracked
+      expect(doubleForkedSession.id).toBe("double-forked-id");
+    });
+
+    it("should accept options parameter", async () => {
+      mockConnection.initialize.mockResolvedValue({
+        protocolVersion: 1,
+        agentCapabilities: {
+          loadSession: true,
+          sessionCapabilities: { fork: {} },
+        },
+      });
+
+      const handle = await AgentHandle.create(testConfig, {});
+
+      // Fork with options (should still use direct fork for untracked session)
+      const forkedSession = await handle.forkSession("original-session", "/test/cwd", {
+        forceFlush: false,
+        idleTimeout: 3000,
+        persistTimeout: 4000,
+      });
+
+      expect(forkedSession.id).toBe("forked-session-id");
+    });
+
+    it("should track loaded sessions for smart fork detection", async () => {
+      mockConnection.initialize.mockResolvedValue({
+        protocolVersion: 1,
+        agentCapabilities: {
+          loadSession: true,
+          sessionCapabilities: { fork: {} },
+        },
+      });
+
+      const handle = await AgentHandle.create(testConfig, {});
+
+      // Load a session (this tracks it in the handle)
+      const loadedSession = await handle.loadSession("loaded-session", "/test/cwd");
+
+      // Fork the tracked, idle session
+      const forkedSession = await handle.forkSession(loadedSession.id, "/test/cwd");
+
+      // Should use direct fork since the loaded session is idle
+      expect(mockConnection.unstable_forkSession).toHaveBeenCalledWith({
+        sessionId: loadedSession.id,
+        cwd: "/test/cwd",
+      });
+      expect(forkedSession.id).toBe("forked-session-id");
     });
   });
 

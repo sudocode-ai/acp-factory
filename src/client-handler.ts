@@ -116,6 +116,8 @@ export class ACPClientHandler implements acp.Client {
     const stream = this.sessionStreams.get(sessionId);
     if (stream) {
       stream.end();
+      // Remove from cache so next getSessionStream() creates a fresh stream
+      this.sessionStreams.delete(sessionId);
     }
   }
 

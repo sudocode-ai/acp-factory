@@ -193,3 +193,47 @@ export interface SessionOptions {
  * Content that can be sent as a prompt
  */
 export type PromptContent = string | acp.ContentBlock[];
+
+/**
+ * Options for flushing a session to disk
+ */
+export interface FlushOptions {
+  /** Maximum time to wait for session to become idle (default: 5000ms) */
+  idleTimeout?: number;
+  /** Maximum time to wait for disk persistence (default: 5000ms) */
+  persistTimeout?: number;
+}
+
+/**
+ * Result of a session flush operation
+ */
+export interface FlushResult {
+  /** Whether the flush succeeded */
+  success: boolean;
+  /** Path to the session file (if successful) */
+  filePath?: string;
+  /** Error message (if failed) */
+  error?: string;
+}
+
+/**
+ * Options for forking a session
+ */
+export interface ForkSessionOptions {
+  /**
+   * Force using flush-based forking even if the session appears idle.
+   * Use this when you want to ensure the session is definitely persisted
+   * before forking, regardless of its current state.
+   */
+  forceFlush?: boolean;
+  /**
+   * Maximum time to wait for session to become idle (default: 5000ms).
+   * Only applicable when flush is needed.
+   */
+  idleTimeout?: number;
+  /**
+   * Maximum time to wait for disk persistence (default: 5000ms).
+   * Only applicable when flush is needed.
+   */
+  persistTimeout?: number;
+}

@@ -5,7 +5,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { Writable, Readable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
-import type { AgentConfig, SpawnOptions, SessionOptions } from "./types.js";
+import type { AgentConfig, SpawnOptions, SessionOptions, ForkSessionOptions } from "./types.js";
 import type { AgentCapabilities } from "@agentclientprotocol/sdk";
 import { Session } from "./session.js";
 import { ACPClientHandler } from "./client-handler.js";
@@ -15,6 +15,12 @@ import { ACPClientHandler } from "./client-handler.js";
  */
 export class AgentHandle {
   readonly capabilities: AgentCapabilities;
+
+  /**
+   * Map of session IDs to Session objects for tracking active sessions.
+   * Used for smart fork detection to determine if a session is processing.
+   */
+  private readonly sessions: Map<string, Session> = new Map();
 
   private constructor(
     private readonly process: ChildProcess,
@@ -131,13 +137,19 @@ export class AgentHandle {
       });
     }
 
-    return new Session(
+    const session = new Session(
       result.sessionId,
       this.connection,
       this.clientHandler,
+      cwd,
       result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
       result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
     );
+
+    // Track session for smart fork detection
+    this.sessions.set(result.sessionId, session);
+
+    return session;
   }
 
   /**
@@ -158,13 +170,19 @@ export class AgentHandle {
       mcpServers,
     });
 
-    return new Session(
+    const session = new Session(
       sessionId,
       this.connection,
       this.clientHandler,
+      cwd,
       result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
       result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
     );
+
+    // Track session for smart fork detection
+    this.sessions.set(sessionId, session);
+
+    return session;
   }
 
   /**
@@ -173,24 +191,67 @@ export class AgentHandle {
    * The forked session inherits the conversation history from the original,
    * allowing operations without affecting the original session's state.
    *
+   * This method uses smart detection to determine the best forking approach:
+   * - If the source session is actively processing or not persisted, uses forkWithFlush
+   * - If the source session is idle and persisted, uses direct fork
+   * - Use `forceFlush: true` to always use the flush approach
+   *
+   * @param sessionId - The ID of the session to fork
+   * @param cwd - The current working directory for the forked session
+   * @param options - Optional fork configuration
    * @experimental This relies on the unstable session/fork ACP capability
    */
-  async forkSession(sessionId: string): Promise<Session> {
+  async forkSession(
+    sessionId: string,
+    cwd: string,
+    options: ForkSessionOptions = {}
+  ): Promise<Session> {
     if (!this.capabilities.sessionCapabilities?.fork) {
       throw new Error("Agent does not support forking sessions");
     }
 
-    const result = await this.connection.forkSession({
+    const sourceSession = this.sessions.get(sessionId);
+
+    // Determine if flush is needed:
+    // 1. forceFlush option is set
+    // 2. Source session is currently processing
+    // 3. Source session is not tracked (might be from previous process, needs flush to ensure persistence)
+    const needsFlush = options.forceFlush ||
+      (sourceSession && sourceSession.isProcessing) ||
+      !sourceSession;
+
+    if (needsFlush && sourceSession) {
+      // Use forkWithFlush for active or processing sessions
+      const forkedSession = await sourceSession.forkWithFlush({
+        idleTimeout: options.idleTimeout,
+        persistTimeout: options.persistTimeout,
+      });
+
+      // Track the forked session
+      this.sessions.set(forkedSession.id, forkedSession);
+
+      return forkedSession;
+    }
+
+    // Direct fork for persisted idle sessions (or when source session is unknown)
+    const result = await this.connection.unstable_forkSession({
       sessionId,
+      cwd,
     });
 
-    return new Session(
+    const forkedSession = new Session(
       result.sessionId,
       this.connection,
       this.clientHandler,
+      cwd,
       result.modes?.availableModes?.map((m: { id: string }) => m.id) ?? [],
       result.models?.availableModels?.map((m: { modelId: string }) => m.modelId) ?? []
     );
+
+    // Track the forked session
+    this.sessions.set(result.sessionId, forkedSession);
+
+    return forkedSession;
   }
 
   /**
