@@ -9,6 +9,7 @@ import { AgentHandle } from "./agent-handle.js";
 import { claudeCodeConfig } from "./providers/claude-code.js";
 import { codexConfig } from "./providers/codex.js";
 import { geminiConfig } from "./providers/gemini.js";
+import { opencodeConfig } from "./providers/opencode.js";
 
 /**
  * Factory for spawning and managing agents
@@ -21,6 +22,7 @@ export class AgentFactory {
     AgentFactory.register("claude-code", claudeCodeConfig);
     AgentFactory.register("codex", codexConfig);
     AgentFactory.register("gemini", geminiConfig);
+    AgentFactory.register("opencode", opencodeConfig); // Note: not e2e tested.
   }
 
   /**
@@ -54,7 +56,9 @@ export class AgentFactory {
     const config = AgentFactory.registry.get(name);
     if (!config) {
       throw new Error(
-        `Unknown agent type: ${name}. Available: ${AgentFactory.listAgents().join(", ")}`
+        `Unknown agent type: ${name}. Available: ${AgentFactory.listAgents().join(
+          ", "
+        )}`
       );
     }
 

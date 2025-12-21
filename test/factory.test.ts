@@ -243,4 +243,26 @@ describe("AgentFactory", () => {
       expect(agents).toContain("gemini");
     });
   });
+
+  describe("opencode provider", () => {
+    it("should have opencode pre-registered", () => {
+      const config = AgentFactory.getConfig("opencode");
+
+      expect(config).toBeDefined();
+      expect(config?.command).toBe("opencode");
+      expect(config?.args).toContain("acp");
+    });
+
+    it("should be spawnable", async () => {
+      await AgentFactory.spawn("opencode");
+
+      expect(AgentHandle.create).toHaveBeenCalled();
+    });
+
+    it("should be listed in available agents", () => {
+      const agents = AgentFactory.listAgents();
+
+      expect(agents).toContain("opencode");
+    });
+  });
 });
