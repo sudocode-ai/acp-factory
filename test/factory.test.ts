@@ -220,4 +220,27 @@ describe("AgentFactory", () => {
       expect(agents).toContain("codex");
     });
   });
+
+  describe("gemini provider", () => {
+    it("should have gemini pre-registered", () => {
+      const config = AgentFactory.getConfig("gemini");
+
+      expect(config).toBeDefined();
+      expect(config?.command).toBe("npx");
+      expect(config?.args).toContain("@google/gemini-cli");
+      expect(config?.args).toContain("--experimental-acp");
+    });
+
+    it("should be spawnable", async () => {
+      await AgentFactory.spawn("gemini");
+
+      expect(AgentHandle.create).toHaveBeenCalled();
+    });
+
+    it("should be listed in available agents", () => {
+      const agents = AgentFactory.listAgents();
+
+      expect(agents).toContain("gemini");
+    });
+  });
 });

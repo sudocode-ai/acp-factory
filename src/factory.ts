@@ -8,6 +8,7 @@ import { AgentHandle } from "./agent-handle.js";
 // Import default providers
 import { claudeCodeConfig } from "./providers/claude-code.js";
 import { codexConfig } from "./providers/codex.js";
+import { geminiConfig } from "./providers/gemini.js";
 
 /**
  * Factory for spawning and managing agents
@@ -19,6 +20,7 @@ export class AgentFactory {
   static {
     AgentFactory.register("claude-code", claudeCodeConfig);
     AgentFactory.register("codex", codexConfig);
+    AgentFactory.register("gemini", geminiConfig);
   }
 
   /**
