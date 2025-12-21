@@ -198,4 +198,26 @@ describe("AgentFactory", () => {
       expect(AgentHandle.create).toHaveBeenCalled();
     });
   });
+
+  describe("codex provider", () => {
+    it("should have codex pre-registered", () => {
+      const config = AgentFactory.getConfig("codex");
+
+      expect(config).toBeDefined();
+      expect(config?.command).toBe("npx");
+      expect(config?.args).toContain("@zed-industries/codex-acp");
+    });
+
+    it("should be spawnable", async () => {
+      await AgentFactory.spawn("codex");
+
+      expect(AgentHandle.create).toHaveBeenCalled();
+    });
+
+    it("should be listed in available agents", () => {
+      const agents = AgentFactory.listAgents();
+
+      expect(agents).toContain("codex");
+    });
+  });
 });

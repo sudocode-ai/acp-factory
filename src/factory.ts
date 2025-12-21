@@ -7,6 +7,7 @@ import { AgentHandle } from "./agent-handle.js";
 
 // Import default providers
 import { claudeCodeConfig } from "./providers/claude-code.js";
+import { codexConfig } from "./providers/codex.js";
 
 /**
  * Factory for spawning and managing agents
@@ -17,6 +18,7 @@ export class AgentFactory {
   // Static initialization - register default providers
   static {
     AgentFactory.register("claude-code", claudeCodeConfig);
+    AgentFactory.register("codex", codexConfig);
   }
 
   /**
