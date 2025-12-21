@@ -24,6 +24,10 @@
     "test:run": "vitest run",
     "test:e2e": "RUN_E2E_TESTS=true vitest run test/e2e/",
     "test:e2e:local": "RUN_E2E_TESTS=true USE_LOCAL_FORK=true vitest run test/e2e/",
+    "test:e2e:codex": "RUN_E2E_TESTS=true vitest run test/e2e/codex.e2e.test.ts",
+    "test:e2e:gemini": "RUN_E2E_TESTS=true vitest run test/e2e/gemini.e2e.test.ts",
+    "test:e2e:opencode": "RUN_E2E_TESTS=true vitest run test/e2e/opencode.e2e.test.ts",
+    "test:e2e:claude": "RUN_E2E_TESTS=true vitest run test/e2e/session-fork-resume.test.ts test/e2e/fork-with-flush.e2e.test.ts",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "clean": "rm -rf dist",
@@ -50,8 +54,6 @@
     "acp",
     "agent",
     "agent-client-protocol",
-    "claude",
-    "claude-code",
     "ai",
     "llm",
     "typescript",
@@ -66,10 +68,18 @@
     "@agentclientprotocol/sdk": "^0.12.0"
   },
   "peerDependencies": {
-    "@sudocode-ai/claude-code-acp": "^0.12.10"
+    "@sudocode-ai/claude-code-acp": "^0.12.10",
+    "@zed-industries/codex-acp": "^0.7.4",
+    "@google/gemini-cli": "^0.21.0"
   },
   "peerDependenciesMeta": {
     "@sudocode-ai/claude-code-acp": {
+      "optional": true
+    },
+    "@zed-industries/codex-acp": {
+      "optional": true
+    },
+    "@google/gemini-cli": {
       "optional": true
     }
   },
