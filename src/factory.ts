@@ -8,6 +8,7 @@ import { AgentHandle } from "./agent-handle.js";
 // Import default providers
 import { claudeCodeConfig } from "./providers/claude-code.js";
 import { codexConfig } from "./providers/codex.js";
+import { copilotCliConfig } from "./providers/copilot-cli.js";
 import { geminiConfig } from "./providers/gemini.js";
 import { opencodeConfig } from "./providers/opencode.js";
 
@@ -21,6 +22,7 @@ export class AgentFactory {
   static {
     AgentFactory.register("claude-code", claudeCodeConfig);
     AgentFactory.register("codex", codexConfig);
+    AgentFactory.register("copilot-cli", copilotCliConfig);
     AgentFactory.register("gemini", geminiConfig);
     AgentFactory.register("opencode", opencodeConfig); // Note: not e2e tested.
   }

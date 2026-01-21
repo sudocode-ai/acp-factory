@@ -25,6 +25,7 @@
     "test:e2e": "RUN_E2E_TESTS=true vitest run test/e2e/",
     "test:e2e:local": "RUN_E2E_TESTS=true USE_LOCAL_FORK=true vitest run test/e2e/",
     "test:e2e:codex": "RUN_E2E_TESTS=true vitest run test/e2e/codex.e2e.test.ts",
+    "test:e2e:copilot-cli": "RUN_E2E_TESTS=true vitest run test/e2e/copilot-cli.e2e.test.ts",
     "test:e2e:gemini": "RUN_E2E_TESTS=true vitest run test/e2e/gemini.e2e.test.ts",
     "test:e2e:opencode": "RUN_E2E_TESTS=true vitest run test/e2e/opencode.e2e.test.ts",
     "test:e2e:claude": "RUN_E2E_TESTS=true vitest run test/e2e/session-fork-resume.test.ts test/e2e/fork-with-flush.e2e.test.ts",
@@ -70,6 +71,7 @@
   "peerDependencies": {
     "@sudocode-ai/claude-code-acp": "^0.13.4",
     "@zed-industries/codex-acp": "^0.7.4",
+    "@github/copilot": ">0.0.388",
     "@google/gemini-cli": "^0.21.0"
   },
   "peerDependenciesMeta": {
@@ -77,6 +79,9 @@
       "optional": true
     },
     "@zed-industries/codex-acp": {
+      "optional": true
+    },
+    "@github/copilot": {
       "optional": true
     },
     "@google/gemini-cli": {

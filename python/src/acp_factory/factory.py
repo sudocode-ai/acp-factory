@@ -63,11 +63,13 @@ class AgentFactory:
 def _register_defaults() -> None:
     from acp_factory.providers.claude_code import claude_code_config
     from acp_factory.providers.codex import codex_config
+    from acp_factory.providers.copilot_cli import copilot_cli_config
     from acp_factory.providers.gemini import gemini_config
     from acp_factory.providers.opencode import opencode_config
 
     AgentFactory.register("claude-code", claude_code_config)
     AgentFactory.register("codex", codex_config)
+    AgentFactory.register("copilot-cli", copilot_cli_config)
     AgentFactory.register("gemini", gemini_config)
     AgentFactory.register("opencode", opencode_config)
 
