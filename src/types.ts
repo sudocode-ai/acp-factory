@@ -237,3 +237,13 @@ export interface ForkSessionOptions {
    */
   persistTimeout?: number;
 }
+
+/**
+ * Result of a session inject operation
+ */
+export interface InjectResult {
+  /** Whether the inject succeeded */
+  success: boolean;
+  /** Error message (if failed) */
+  error?: string;
+}

@@ -6,7 +6,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import type * as acp from "@agentclientprotocol/sdk";
-import type { PromptContent, ExtendedSessionUpdate, FlushOptions, FlushResult } from "./types.js";
+import type { PromptContent, ExtendedSessionUpdate, FlushOptions, FlushResult, InjectResult } from "./types.js";
 import type { ACPClientHandler } from "./client-handler.js";
 
 /**
@@ -192,6 +192,109 @@ export class Session {
       "'_session/addContext' extension method. Use interruptWith() as an alternative, " +
       "which cancels the current prompt and starts a new one."
     );
+  }
+
+  /**
+   * Inject a message into the session for processing in the next turn.
+   *
+   * This method queues a message that will be processed when the next prompt()
+   * call is made. Unlike addContext(), the injected message is not processed
+   * immediately during the current turn - it becomes part of the next turn's input.
+   *
+   * Use cases:
+   * - Queuing clarifications or corrections while the agent is working
+   * - Adding context that should influence the next interaction
+   * - Providing additional instructions between prompt calls
+   *
+   * NOTE: This feature requires agent support for the `_session/inject` extension method.
+   * Check `supportsInject()` or handle the error result to detect unsupported agents.
+   *
+   * @param content - The message to inject (string or ContentBlock array)
+   * @param options - Optional configuration
+   * @param options.throwOnUnsupported - If true, throws an error when agent doesn't support inject (default: false)
+   * @returns Object with success status and optional error message
+   *
+   * @example
+   * ```typescript
+   * // While agent is processing a prompt
+   * for await (const update of session.prompt("Analyze the codebase")) {
+   *   handleUpdate(update);
+   *   if (userHasClarification) {
+   *     // Queue a message for the next turn
+   *     await session.inject("Focus on TypeScript files only");
+   *   }
+   * }
+   *
+   * // The injected message will be processed in the next prompt
+   * for await (const update of session.prompt("Continue analysis")) {
+   *   // Agent will see the injected message here
+   *   handleUpdate(update);
+   * }
+   * ```
+   */
+  async inject(
+    content: PromptContent,
+    options: { throwOnUnsupported?: boolean } = {}
+  ): Promise<InjectResult> {
+    const { throwOnUnsupported = false } = options;
+
+    // Check if the connection has extMethod capability
+    const connection = this.connection as unknown as {
+      extMethod?: (method: string, params: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>
+    };
+
+    if (!connection.extMethod) {
+      const error = "Agent does not support extension methods required for inject.";
+      if (throwOnUnsupported) {
+        throw new Error(error);
+      }
+      return { success: false, error };
+    }
+
+    try {
+      // Convert string to ContentBlock array if needed
+      const message: acp.ContentBlock[] =
+        typeof content === "string"
+          ? [{ type: "text", text: content }]
+          : content;
+
+      // Call the agent's _session/inject extension method
+      const result = await connection.extMethod("_session/inject", {
+        sessionId: this.id,
+        message,
+      });
+
+      return result;
+    } catch (error) {
+      const errorMessage = String(error);
+
+      // Check for "method not found" errors and provide a clearer message
+      if (errorMessage.includes("not found") || errorMessage.includes("not supported")) {
+        const friendlyError = "Agent does not support the inject feature.";
+        if (throwOnUnsupported) {
+          throw new Error(friendlyError);
+        }
+        return { success: false, error: friendlyError };
+      }
+
+      return {
+        success: false,
+        error: `Failed to inject message: ${errorMessage}`,
+      };
+    }
+  }
+
+  /**
+   * Check if this session's agent supports the inject feature.
+   *
+   * Note: This only checks if the connection has extMethod capability.
+   * The actual _session/inject method support can only be verified by calling inject().
+   *
+   * @returns true if the agent may support inject, false if definitely not supported
+   */
+  supportsInject(): boolean {
+    const connection = this.connection as unknown as { extMethod?: unknown };
+    return typeof connection.extMethod === "function";
   }
 
   /**
