@@ -687,6 +687,168 @@ describe("Session", () => {
 
       expect(session.supportsInject()).toBe(false);
     });
+
+    it("should return cached true after successful inject", async () => {
+      const mockExtMethod = vi.fn().mockResolvedValue({ success: true });
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      // Before inject, returns true based on extMethod existence
+      expect(session.supportsInject()).toBe(true);
+
+      // After successful inject, should cache and return true
+      await session.inject("test");
+      expect(session.supportsInject()).toBe(true);
+    });
+
+    it("should return cached false after method not found error", async () => {
+      const mockExtMethod = vi.fn().mockRejectedValue(new Error("Method not found"));
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      // Before inject, returns true based on extMethod existence
+      expect(session.supportsInject()).toBe(true);
+
+      // After method not found error, should cache and return false
+      await session.inject("test");
+      expect(session.supportsInject()).toBe(false);
+    });
+  });
+
+  describe("checkInjectSupport", () => {
+    it("should return true and cache when inject succeeds", async () => {
+      const mockExtMethod = vi.fn().mockResolvedValue({ success: true });
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      const result = await session.checkInjectSupport();
+
+      expect(result).toBe(true);
+      expect(mockExtMethod).toHaveBeenCalledWith("_session/inject", {
+        sessionId: "test-id",
+        message: [],
+      });
+
+      // Should be cached now
+      expect(session.supportsInject()).toBe(true);
+
+      // Second call should not call extMethod again
+      mockExtMethod.mockClear();
+      const cachedResult = await session.checkInjectSupport();
+      expect(cachedResult).toBe(true);
+      expect(mockExtMethod).not.toHaveBeenCalled();
+    });
+
+    it("should return false and cache when method not found", async () => {
+      const mockExtMethod = vi.fn().mockRejectedValue(new Error("Method not found: _session/inject"));
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      const result = await session.checkInjectSupport();
+
+      expect(result).toBe(false);
+      expect(session.supportsInject()).toBe(false);
+    });
+
+    it("should return false immediately when connection lacks extMethod", async () => {
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      const result = await session.checkInjectSupport();
+
+      expect(result).toBe(false);
+      expect(session.supportsInject()).toBe(false);
+    });
+
+    it("should handle other errors without caching", async () => {
+      const mockExtMethod = vi.fn().mockRejectedValue(new Error("Network error"));
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      const result = await session.checkInjectSupport();
+
+      // Returns false but doesn't cache (network errors could be transient)
+      expect(result).toBe(false);
+
+      // supportsInject still returns true based on extMethod presence
+      // because we didn't cache the result for transient errors
+      expect(session.supportsInject()).toBe(true);
+    });
+
+    it("should treat non-not-found error response as supported", async () => {
+      // If the method exists but returns an error like "session not found",
+      // the inject method itself is still supported
+      const mockExtMethod = vi.fn().mockResolvedValue({
+        success: false,
+        error: "Session not active",
+      });
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      const result = await session.checkInjectSupport();
+
+      // Method exists, just returned an error for other reasons
+      expect(result).toBe(true);
+      expect(session.supportsInject()).toBe(true);
+    });
   });
 
   describe("fork", () => {

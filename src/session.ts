@@ -27,6 +27,15 @@ export class Session {
    */
   isProcessing: boolean = false;
 
+  /**
+   * Cached result of inject support check.
+   * - undefined: not yet checked
+   * - true: inject is supported
+   * - false: inject is not supported
+   * @internal
+   */
+  private _injectSupported: boolean | undefined = undefined;
+
   constructor(
     id: string,
     connection: acp.ClientSideConnection,
@@ -244,6 +253,7 @@ export class Session {
     };
 
     if (!connection.extMethod) {
+      this._injectSupported = false;
       const error = "Agent does not support extension methods required for inject.";
       if (throwOnUnsupported) {
         throw new Error(error);
@@ -264,12 +274,18 @@ export class Session {
         message,
       });
 
+      // Cache the result - inject is supported if we got a successful result
+      if (result.success) {
+        this._injectSupported = true;
+      }
+
       return result;
     } catch (error) {
       const errorMessage = String(error);
 
       // Check for "method not found" errors and provide a clearer message
-      if (errorMessage.includes("not found") || errorMessage.includes("not supported")) {
+      if (errorMessage.includes("not found") || errorMessage.includes("not supported") || errorMessage.includes("Method not found")) {
+        this._injectSupported = false;
         const friendlyError = "Agent does not support the inject feature.";
         if (throwOnUnsupported) {
           throw new Error(friendlyError);
@@ -287,14 +303,83 @@ export class Session {
   /**
    * Check if this session's agent supports the inject feature.
    *
-   * Note: This only checks if the connection has extMethod capability.
-   * The actual _session/inject method support can only be verified by calling inject().
+   * This method returns:
+   * - `false` if the agent definitely doesn't support inject (no extMethod or previously failed)
+   * - `true` if inject has been verified to work, or if extMethod exists but hasn't been tested yet
+   *
+   * For a definitive check, use `checkInjectSupport()` which actually probes the agent.
    *
    * @returns true if the agent may support inject, false if definitely not supported
    */
   supportsInject(): boolean {
+    // If we've already verified, return the cached result
+    if (this._injectSupported !== undefined) {
+      return this._injectSupported;
+    }
+
+    // Otherwise, check if extMethod exists (necessary but not sufficient)
     const connection = this.connection as unknown as { extMethod?: unknown };
     return typeof connection.extMethod === "function";
+  }
+
+  /**
+   * Check if this session's agent supports the inject feature by probing the agent.
+   *
+   * This method sends a no-op inject request to verify the agent actually implements
+   * the `_session/inject` extension method. The result is cached for subsequent calls.
+   *
+   * Use this for a definitive check before relying on inject functionality.
+   *
+   * @returns true if the agent supports inject, false otherwise
+   *
+   * @example
+   * ```typescript
+   * const hasInject = await session.checkInjectSupport();
+   * if (hasInject) {
+   *   await session.inject("Additional context");
+   * } else {
+   *   // Fall back to interruptWith or handle differently
+   *   await session.interruptWith("New prompt with context");
+   * }
+   * ```
+   */
+  async checkInjectSupport(): Promise<boolean> {
+    // Return cached result if available
+    if (this._injectSupported !== undefined) {
+      return this._injectSupported;
+    }
+
+    // Check if extMethod exists first
+    const connection = this.connection as unknown as {
+      extMethod?: (method: string, params: Record<string, unknown>) => Promise<Record<string, unknown>>
+    };
+
+    if (!connection.extMethod) {
+      this._injectSupported = false;
+      return false;
+    }
+
+    // Probe the agent with an empty message to check if the method exists
+    // This is a lightweight check that shouldn't have side effects
+    try {
+      const result = await connection.extMethod("_session/inject", {
+        sessionId: this.id,
+        message: [], // Empty message array - no-op
+      });
+
+      // If we get a result (success or not), the method exists
+      this._injectSupported = result.success === true || !String(result.error || "").includes("not found");
+      return this._injectSupported;
+    } catch (error) {
+      const errorMessage = String(error);
+      // Method not found errors indicate inject is not supported
+      if (errorMessage.includes("not found") || errorMessage.includes("not supported") || errorMessage.includes("Method not found")) {
+        this._injectSupported = false;
+        return false;
+      }
+      // Other errors (network, etc.) - don't cache, let caller retry
+      return false;
+    }
   }
 
   /**
