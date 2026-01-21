@@ -6,7 +6,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import type * as acp from "@agentclientprotocol/sdk";
-import type { PromptContent, ExtendedSessionUpdate, FlushOptions, FlushResult, InjectResult } from "./types.js";
+import type { PromptContent, ExtendedSessionUpdate, FlushOptions, FlushResult, InjectResult, CompactionConfig } from "./types.js";
 import type { ACPClientHandler } from "./client-handler.js";
 
 /**
@@ -393,6 +393,76 @@ export class Session {
       sessionId: this.id,
       modeId: mode,
     });
+  }
+
+  /**
+   * Configure automatic context compaction for this session.
+   *
+   * When enabled, the session will automatically trigger compaction when token usage
+   * exceeds the configured threshold. This helps manage context window limits during
+   * long-running conversations.
+   *
+   * @param config - Compaction configuration
+   * @param config.enabled - Whether automatic compaction is enabled
+   * @param config.contextTokenThreshold - Token count that triggers compaction (default: 100000)
+   * @param config.customInstructions - Optional instructions for the compaction summary
+   *
+   * @throws Error if the agent does not support compaction configuration
+   *
+   * @example
+   * ```typescript
+   * // Enable auto-compaction with custom threshold
+   * await session.setCompaction({
+   *   enabled: true,
+   *   contextTokenThreshold: 50000,
+   *   customInstructions: "Focus on code changes and key decisions"
+   * });
+   *
+   * // Disable auto-compaction
+   * await session.setCompaction({ enabled: false });
+   * ```
+   */
+  async setCompaction(config: CompactionConfig): Promise<void> {
+    // Check if the connection has extMethod capability
+    const connection = this.connection as unknown as {
+      extMethod?: (
+        method: string,
+        params: Record<string, unknown>
+      ) => Promise<{ success: boolean; error?: string }>;
+    };
+
+    if (!connection.extMethod) {
+      throw new Error(
+        "Agent does not support extension methods required for compaction configuration."
+      );
+    }
+
+    let result: { success: boolean; error?: string };
+    try {
+      result = await connection.extMethod("_session/setCompaction", {
+        sessionId: this.id,
+        enabled: config.enabled,
+        contextTokenThreshold: config.contextTokenThreshold,
+        customInstructions: config.customInstructions,
+      });
+    } catch (error) {
+      const errorMessage = String(error);
+
+      // Check for "method not found" errors and provide a clearer message
+      if (
+        errorMessage.includes("Method not found") ||
+        errorMessage.includes("not supported")
+      ) {
+        throw new Error("Agent does not support compaction configuration.");
+      }
+
+      throw error;
+    }
+
+    // Handle error response from the agent (outside try-catch to avoid false positives)
+    if (!result.success) {
+      throw new Error(result.error ?? "Failed to set compaction configuration");
+    }
   }
 
   /**

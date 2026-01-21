@@ -59,6 +59,12 @@ export type {
   InjectResult,
 } from "./types.js";
 
+// Compaction configuration types
+export type {
+  CompactionConfig,
+  AgentMeta,
+} from "./types.js";
+
 // Re-export ACP types - Terminals
 export type {
   CreateTerminalRequest,

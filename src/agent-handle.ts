@@ -127,6 +127,8 @@ export class AgentHandle {
     const result = await this.connection.newSession({
       cwd,
       mcpServers: options.mcpServers ?? [],
+      // Pass agent-specific metadata through _meta
+      ...(options.agentMeta && { _meta: options.agentMeta }),
     });
 
     // Set mode if specified

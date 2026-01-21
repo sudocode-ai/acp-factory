@@ -1011,4 +1011,157 @@ describe("Session", () => {
       expect(filePath).toBe(`${homeDir}/.claude/projects/${expectedHash}/different-session-id.jsonl`);
     });
   });
+
+  describe("setCompaction", () => {
+    it("should call extMethod with _session/setCompaction", async () => {
+      const mockExtMethod = vi.fn().mockResolvedValue({ success: true });
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await session.setCompaction({
+        enabled: true,
+        contextTokenThreshold: 50000,
+        customInstructions: "Focus on key decisions",
+      });
+
+      expect(mockExtMethod).toHaveBeenCalledWith("_session/setCompaction", {
+        sessionId: "test-id",
+        enabled: true,
+        contextTokenThreshold: 50000,
+        customInstructions: "Focus on key decisions",
+      });
+    });
+
+    it("should work with minimal config (enabled only)", async () => {
+      const mockExtMethod = vi.fn().mockResolvedValue({ success: true });
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await session.setCompaction({ enabled: false });
+
+      expect(mockExtMethod).toHaveBeenCalledWith("_session/setCompaction", {
+        sessionId: "test-id",
+        enabled: false,
+        contextTokenThreshold: undefined,
+        customInstructions: undefined,
+      });
+    });
+
+    it("should throw when agent does not support extMethod", async () => {
+      // Connection without extMethod
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await expect(
+        session.setCompaction({ enabled: true })
+      ).rejects.toThrow("does not support extension methods");
+    });
+
+    it("should throw when extMethod returns error", async () => {
+      const mockExtMethod = vi.fn().mockResolvedValue({
+        success: false,
+        error: "Session not found",
+      });
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await expect(
+        session.setCompaction({ enabled: true })
+      ).rejects.toThrow("Session not found");
+    });
+
+    it("should throw friendly error when method not found", async () => {
+      const mockExtMethod = vi.fn().mockRejectedValue(
+        new Error("Method not found: _session/setCompaction")
+      );
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await expect(
+        session.setCompaction({ enabled: true })
+      ).rejects.toThrow("does not support compaction configuration");
+    });
+
+    it("should throw friendly error when method not supported", async () => {
+      const mockExtMethod = vi.fn().mockRejectedValue(
+        new Error("Method not supported")
+      );
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await expect(
+        session.setCompaction({ enabled: true })
+      ).rejects.toThrow("does not support compaction configuration");
+    });
+
+    it("should re-throw other errors", async () => {
+      const mockExtMethod = vi.fn().mockRejectedValue(
+        new Error("Connection timeout")
+      );
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await expect(
+        session.setCompaction({ enabled: true })
+      ).rejects.toThrow("Connection timeout");
+    });
+  });
 });

@@ -180,6 +180,58 @@ export interface SpawnOptions extends ClientHandlers {
 }
 
 /**
+ * Configuration for automatic context compaction.
+ * When enabled, the session will automatically trigger compaction when token usage exceeds the threshold.
+ */
+export interface CompactionConfig {
+  /**
+   * Whether automatic compaction is enabled.
+   * @default false
+   */
+  enabled: boolean;
+
+  /**
+   * Token threshold that triggers automatic compaction.
+   * When the total token count exceeds this value, a /compact command is automatically sent.
+   * @default 100000
+   */
+  contextTokenThreshold?: number;
+
+  /**
+   * Optional custom instructions for the compaction summary.
+   * These instructions guide how the agent summarizes the conversation.
+   */
+  customInstructions?: string;
+}
+
+/**
+ * Agent-specific metadata passed to the agent when creating a session.
+ * This is passed through as `_meta` in the ACP NewSessionRequest.
+ */
+export interface AgentMeta {
+  /**
+   * Claude Code specific configuration
+   */
+  claudeCode?: {
+    /**
+     * Configuration for automatic context compaction
+     */
+    compaction?: CompactionConfig;
+
+    /**
+     * Additional options passed to Claude Code SDK.
+     * See claude-code-acp documentation for available options.
+     */
+    options?: Record<string, unknown>;
+  };
+
+  /**
+   * Allow additional agent-specific metadata
+   */
+  [key: string]: unknown;
+}
+
+/**
  * Options for creating a session
  */
 export interface SessionOptions {
@@ -187,6 +239,11 @@ export interface SessionOptions {
   mcpServers?: acp.McpServer[];
   /** Initial mode for the session */
   mode?: string;
+  /**
+   * Agent-specific metadata passed through as `_meta` in the ACP protocol.
+   * Use this for agent-specific configuration like compaction settings.
+   */
+  agentMeta?: AgentMeta;
 }
 
 /**
