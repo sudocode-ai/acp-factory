@@ -51,6 +51,13 @@ export type {
   ExtendedSessionUpdate,
 } from "./types.js";
 
+// Compaction event types
+export type {
+  CompactionStartedUpdate,
+  CompactionCompletedUpdate,
+  CompactionUpdate,
+} from "./types.js";
+
 // Session flush, fork, and inject types
 export type {
   FlushOptions,

@@ -3,6 +3,10 @@ import type {
   CompactionConfig,
   AgentMeta,
   SessionOptions,
+  CompactionStartedUpdate,
+  CompactionCompletedUpdate,
+  CompactionUpdate,
+  ExtendedSessionUpdate,
 } from "../src/types.js";
 
 describe("CompactionConfig", () => {
@@ -193,5 +197,117 @@ describe("CompactionConfig default values", () => {
     expect(minimalConfig.contextTokenThreshold).toBeUndefined();
     // Document the expected default
     expect(DEFAULT_THRESHOLD).toBe(100000);
+  });
+});
+
+describe("CompactionStartedUpdate", () => {
+  it("should have correct structure for auto-triggered compaction", () => {
+    const update: CompactionStartedUpdate = {
+      sessionUpdate: "compaction_started",
+      sessionId: "session-123",
+      trigger: "auto",
+      preTokens: 105000,
+      threshold: 100000,
+    };
+
+    expect(update.sessionUpdate).toBe("compaction_started");
+    expect(update.sessionId).toBe("session-123");
+    expect(update.trigger).toBe("auto");
+    expect(update.preTokens).toBe(105000);
+    expect(update.threshold).toBe(100000);
+  });
+
+  it("should have correct structure for manually-triggered compaction", () => {
+    const update: CompactionStartedUpdate = {
+      sessionUpdate: "compaction_started",
+      sessionId: "session-456",
+      trigger: "manual",
+      preTokens: 80000,
+    };
+
+    expect(update.sessionUpdate).toBe("compaction_started");
+    expect(update.trigger).toBe("manual");
+    expect(update.threshold).toBeUndefined();
+  });
+});
+
+describe("CompactionCompletedUpdate", () => {
+  it("should have correct structure", () => {
+    const update: CompactionCompletedUpdate = {
+      sessionUpdate: "compaction_completed",
+      sessionId: "session-123",
+      trigger: "auto",
+      preTokens: 105000,
+    };
+
+    expect(update.sessionUpdate).toBe("compaction_completed");
+    expect(update.sessionId).toBe("session-123");
+    expect(update.trigger).toBe("auto");
+    expect(update.preTokens).toBe(105000);
+  });
+});
+
+describe("CompactionUpdate union type", () => {
+  it("should accept CompactionStartedUpdate", () => {
+    const update: CompactionUpdate = {
+      sessionUpdate: "compaction_started",
+      sessionId: "session-123",
+      trigger: "auto",
+      preTokens: 100000,
+    };
+
+    expect(update.sessionUpdate).toBe("compaction_started");
+  });
+
+  it("should accept CompactionCompletedUpdate", () => {
+    const update: CompactionUpdate = {
+      sessionUpdate: "compaction_completed",
+      sessionId: "session-123",
+      trigger: "manual",
+      preTokens: 80000,
+    };
+
+    expect(update.sessionUpdate).toBe("compaction_completed");
+  });
+});
+
+describe("ExtendedSessionUpdate with compaction events", () => {
+  it("should accept compaction_started as ExtendedSessionUpdate", () => {
+    const update: ExtendedSessionUpdate = {
+      sessionUpdate: "compaction_started",
+      sessionId: "session-123",
+      trigger: "auto",
+      preTokens: 100000,
+      threshold: 100000,
+    } as CompactionStartedUpdate;
+
+    expect((update as CompactionStartedUpdate).sessionUpdate).toBe("compaction_started");
+  });
+
+  it("should accept compaction_completed as ExtendedSessionUpdate", () => {
+    const update: ExtendedSessionUpdate = {
+      sessionUpdate: "compaction_completed",
+      sessionId: "session-123",
+      trigger: "auto",
+      preTokens: 100000,
+    } as CompactionCompletedUpdate;
+
+    expect((update as CompactionCompletedUpdate).sessionUpdate).toBe("compaction_completed");
+  });
+
+  it("should still accept permission_request as ExtendedSessionUpdate", () => {
+    const update: ExtendedSessionUpdate = {
+      sessionUpdate: "permission_request",
+      requestId: "perm-1",
+      sessionId: "session-123",
+      toolCall: {
+        toolCallId: "tool-1",
+        title: "Test Tool",
+        status: "pending",
+      },
+      options: [],
+    };
+
+    expect(update.sessionUpdate).toBe("permission_request");
   });
 });

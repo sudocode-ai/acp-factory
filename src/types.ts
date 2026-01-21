@@ -132,9 +132,43 @@ export interface PermissionRequestUpdate {
 }
 
 /**
- * Extended session update type that includes permission requests
+ * Emitted when context compaction starts.
+ * This can be triggered automatically (when token threshold is exceeded) or manually.
  */
-export type ExtendedSessionUpdate = acp.SessionUpdate | PermissionRequestUpdate;
+export interface CompactionStartedUpdate {
+  sessionUpdate: "compaction_started";
+  /** Session where compaction is occurring */
+  sessionId: string;
+  /** What triggered the compaction */
+  trigger: "auto" | "manual";
+  /** Token count before compaction */
+  preTokens: number;
+  /** Token threshold that triggered auto-compaction (only for auto trigger) */
+  threshold?: number;
+}
+
+/**
+ * Emitted when context compaction completes.
+ */
+export interface CompactionCompletedUpdate {
+  sessionUpdate: "compaction_completed";
+  /** Session where compaction occurred */
+  sessionId: string;
+  /** What triggered the compaction */
+  trigger: "auto" | "manual";
+  /** Token count before compaction */
+  preTokens: number;
+}
+
+/**
+ * Union type for all compaction-related updates
+ */
+export type CompactionUpdate = CompactionStartedUpdate | CompactionCompletedUpdate;
+
+/**
+ * Extended session update type that includes permission requests and compaction events
+ */
+export type ExtendedSessionUpdate = acp.SessionUpdate | PermissionRequestUpdate | CompactionUpdate;
 
 /**
  * Handlers for client-side operations
