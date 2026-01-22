@@ -22,7 +22,7 @@ export class AgentFactory {
   static {
     AgentFactory.register("claude-code", claudeCodeConfig);
     AgentFactory.register("codex", codexConfig);
-    AgentFactory.register("copilot-cli", copilotCliConfig);
+    AgentFactory.register("copilot", copilotCliConfig);
     AgentFactory.register("gemini", geminiConfig);
     AgentFactory.register("opencode", opencodeConfig); // Note: not e2e tested.
   }
