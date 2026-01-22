@@ -278,6 +278,34 @@ export class ACPClientHandler implements acp.Client {
   }
 
   /**
+   * Handle extension notifications from the agent.
+   * Used for custom events like compaction_started/compaction_completed
+   * that aren't part of the standard ACP SessionUpdate schema.
+   */
+  async extNotification(
+    method: string,
+    params: Record<string, unknown>
+  ): Promise<void> {
+    // Handle compaction events by forwarding to the session stream
+    if (method === "compaction_started" || method === "compaction_completed") {
+      const sessionId = params.sessionId as string;
+      if (sessionId) {
+        const stream = this.getSessionStream(sessionId);
+        // Forward as a session update with the method name as sessionUpdate type
+        // Use type assertion since compaction events are ExtendedSessionUpdate types
+        stream.push({
+          sessionUpdate: method,
+          sessionId,
+          trigger: params.trigger,
+          preTokens: params.preTokens,
+          ...(params.threshold !== undefined && { threshold: params.threshold }),
+        } as ExtendedSessionUpdate);
+      }
+    }
+    // Other extension notifications can be handled here as needed
+  }
+
+  /**
    * Handle file read requests
    */
   async readTextFile(

@@ -549,4 +549,135 @@ describe("ACPClientHandler", () => {
       expect(result).toEqual({ exitCode: 0 });
     });
   });
+
+  describe("extNotification", () => {
+    it("should forward compaction_started event to session stream", async () => {
+      const handler = new ACPClientHandler();
+      const stream = handler.getSessionStream("session-1");
+
+      await handler.extNotification("compaction_started", {
+        sessionId: "session-1",
+        trigger: "auto",
+        preTokens: 105000,
+        threshold: 100000,
+      });
+
+      handler.endSessionStream("session-1");
+
+      const results: any[] = [];
+      for await (const item of stream) {
+        results.push(item);
+      }
+
+      expect(results).toHaveLength(1);
+      expect(results[0].sessionUpdate).toBe("compaction_started");
+      expect(results[0].sessionId).toBe("session-1");
+      expect(results[0].trigger).toBe("auto");
+      expect(results[0].preTokens).toBe(105000);
+      expect(results[0].threshold).toBe(100000);
+    });
+
+    it("should forward compaction_completed event to session stream", async () => {
+      const handler = new ACPClientHandler();
+      const stream = handler.getSessionStream("session-1");
+
+      await handler.extNotification("compaction_completed", {
+        sessionId: "session-1",
+        trigger: "auto",
+        preTokens: 105000,
+      });
+
+      handler.endSessionStream("session-1");
+
+      const results: any[] = [];
+      for await (const item of stream) {
+        results.push(item);
+      }
+
+      expect(results).toHaveLength(1);
+      expect(results[0].sessionUpdate).toBe("compaction_completed");
+      expect(results[0].sessionId).toBe("session-1");
+      expect(results[0].trigger).toBe("auto");
+      expect(results[0].preTokens).toBe(105000);
+    });
+
+    it("should not forward events without sessionId", async () => {
+      const handler = new ACPClientHandler();
+      const stream = handler.getSessionStream("session-1");
+
+      // Event without sessionId should be ignored
+      await handler.extNotification("compaction_started", {
+        trigger: "auto",
+        preTokens: 105000,
+      });
+
+      handler.endSessionStream("session-1");
+
+      const results: any[] = [];
+      for await (const item of stream) {
+        results.push(item);
+      }
+
+      expect(results).toHaveLength(0);
+    });
+
+    it("should ignore non-compaction extension notifications", async () => {
+      const handler = new ACPClientHandler();
+      const stream = handler.getSessionStream("session-1");
+
+      // Unknown extension method should be ignored
+      await handler.extNotification("unknown_method", {
+        sessionId: "session-1",
+        someData: "value",
+      });
+
+      handler.endSessionStream("session-1");
+
+      const results: any[] = [];
+      for await (const item of stream) {
+        results.push(item);
+      }
+
+      expect(results).toHaveLength(0);
+    });
+
+    it("should handle compaction events for multiple sessions independently", async () => {
+      const handler = new ACPClientHandler();
+      const stream1 = handler.getSessionStream("session-1");
+      const stream2 = handler.getSessionStream("session-2");
+
+      await handler.extNotification("compaction_started", {
+        sessionId: "session-1",
+        trigger: "auto",
+        preTokens: 100000,
+      });
+
+      await handler.extNotification("compaction_completed", {
+        sessionId: "session-2",
+        trigger: "manual",
+        preTokens: 80000,
+      });
+
+      handler.endSessionStream("session-1");
+      handler.endSessionStream("session-2");
+
+      const results1: any[] = [];
+      for await (const item of stream1) {
+        results1.push(item);
+      }
+
+      const results2: any[] = [];
+      for await (const item of stream2) {
+        results2.push(item);
+      }
+
+      expect(results1).toHaveLength(1);
+      expect(results1[0].sessionUpdate).toBe("compaction_started");
+      expect(results1[0].sessionId).toBe("session-1");
+
+      expect(results2).toHaveLength(1);
+      expect(results2[0].sessionUpdate).toBe("compaction_completed");
+      expect(results2[0].sessionId).toBe("session-2");
+    });
+  });
 });
