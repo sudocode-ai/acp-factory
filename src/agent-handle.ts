@@ -5,7 +5,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { Writable, Readable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
-import type { AgentConfig, SpawnOptions, SessionOptions, ForkSessionOptions } from "./types.js";
+import type { AgentConfig, SpawnOptions, SessionOptions, ForkSessionOptions, AgentMeta } from "./types.js";
 import type { AgentCapabilities } from "@agentclientprotocol/sdk";
 import { Session } from "./session.js";
 import { ACPClientHandler } from "./client-handler.js";
@@ -156,11 +156,16 @@ export class AgentHandle {
 
   /**
    * Load an existing session by ID
+   * @param sessionId - The session ID to load
+   * @param cwd - Working directory for the session
+   * @param mcpServers - Optional MCP servers to configure
+   * @param options - Optional session options including agentMeta for compaction config
    */
   async loadSession(
     sessionId: string,
     cwd: string,
-    mcpServers: Array<{ name: string; uri: string }> = []
+    mcpServers: Array<{ name: string; uri: string }> = [],
+    options?: { agentMeta?: AgentMeta }
   ): Promise<Session> {
     if (!this.capabilities.loadSession) {
       throw new Error("Agent does not support loading sessions");
@@ -170,6 +175,8 @@ export class AgentHandle {
       sessionId,
       cwd,
       mcpServers,
+      // Pass agentMeta as _meta for compaction config and other agent-specific settings
+      ...(options?.agentMeta && { _meta: options.agentMeta }),
     });
 
     const session = new Session(
