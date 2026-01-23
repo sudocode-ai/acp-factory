@@ -269,7 +269,8 @@ export class Session {
           : content;
 
       // Call the agent's _session/inject extension method
-      const result = await connection.extMethod("_session/inject", {
+      // Note: extMethod adds the `_` prefix, so we pass "session/inject"
+      const result = await connection.extMethod("session/inject", {
         sessionId: this.id,
         message,
       });
@@ -361,8 +362,9 @@ export class Session {
 
     // Probe the agent with an empty message to check if the method exists
     // This is a lightweight check that shouldn't have side effects
+    // Note: extMethod adds the `_` prefix, so we pass "session/inject"
     try {
-      const result = await connection.extMethod("_session/inject", {
+      const result = await connection.extMethod("session/inject", {
         sessionId: this.id,
         message: [], // Empty message array - no-op
       });
@@ -438,8 +440,9 @@ export class Session {
     }
 
     let result: { success: boolean; error?: string };
+    // Note: extMethod adds the `_` prefix, so we pass "session/setCompaction"
     try {
-      result = await connection.extMethod("_session/setCompaction", {
+      result = await connection.extMethod("session/setCompaction", {
         sessionId: this.id,
         enabled: config.enabled,
         contextTokenThreshold: config.contextTokenThreshold,
@@ -542,8 +545,9 @@ export class Session {
 
     // Step 2: Call the agent's flush extension method to trigger persistence
     // The agent handles waiting for persistence internally
+    // Note: extMethod adds the `_` prefix, so we pass "session/flush"
     const flushResult = await (this.connection as unknown as { extMethod: (method: string, params: Record<string, unknown>) => Promise<{ success: boolean; filePath?: string; error?: string }> })
-      .extMethod("_session/flush", {
+      .extMethod("session/flush", {
         sessionId: this.id,
         idleTimeout,
         persistTimeout,
@@ -724,8 +728,9 @@ export class Session {
 
       // Call the agent's flush extension method to trigger persistence
       // The agent handles waiting for persistence and returns the result
+      // Note: extMethod adds the `_` prefix, so we pass "session/flush"
       const flushResult = await (this.connection as unknown as { extMethod: (method: string, params: Record<string, unknown>) => Promise<{ success: boolean; filePath?: string; error?: string }> })
-        .extMethod("_session/flush", {
+        .extMethod("session/flush", {
           sessionId: this.id,
           idleTimeout,
           persistTimeout,

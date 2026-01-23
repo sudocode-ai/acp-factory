@@ -495,7 +495,7 @@ describe("Session", () => {
   });
 
   describe("inject", () => {
-    it("should call extMethod with _session/inject and string message", async () => {
+    it("should call extMethod with session/inject and string message", async () => {
       const mockExtMethod = vi.fn().mockResolvedValue({ success: true });
       const connectionWithExtMethod = {
         ...mockConnection,
@@ -511,7 +511,7 @@ describe("Session", () => {
 
       const result = await session.inject("Injected message");
 
-      expect(mockExtMethod).toHaveBeenCalledWith("_session/inject", {
+      expect(mockExtMethod).toHaveBeenCalledWith("session/inject", {
         sessionId: "test-id",
         message: [{ type: "text", text: "Injected message" }],
       });
@@ -539,7 +539,7 @@ describe("Session", () => {
 
       const result = await session.inject(blocks);
 
-      expect(mockExtMethod).toHaveBeenCalledWith("_session/inject", {
+      expect(mockExtMethod).toHaveBeenCalledWith("session/inject", {
         sessionId: "test-id",
         message: blocks,
       });
@@ -621,7 +621,7 @@ describe("Session", () => {
     });
 
     it("should return friendly error when method not found", async () => {
-      const mockExtMethod = vi.fn().mockRejectedValue(new Error("Method not found: _session/inject"));
+      const mockExtMethod = vi.fn().mockRejectedValue(new Error("Method not found: session/inject"));
       const connectionWithExtMethod = {
         ...mockConnection,
         extMethod: mockExtMethod,
@@ -751,7 +751,7 @@ describe("Session", () => {
       const result = await session.checkInjectSupport();
 
       expect(result).toBe(true);
-      expect(mockExtMethod).toHaveBeenCalledWith("_session/inject", {
+      expect(mockExtMethod).toHaveBeenCalledWith("session/inject", {
         sessionId: "test-id",
         message: [],
       });
@@ -767,7 +767,7 @@ describe("Session", () => {
     });
 
     it("should return false and cache when method not found", async () => {
-      const mockExtMethod = vi.fn().mockRejectedValue(new Error("Method not found: _session/inject"));
+      const mockExtMethod = vi.fn().mockRejectedValue(new Error("Method not found: session/inject"));
       const connectionWithExtMethod = {
         ...mockConnection,
         extMethod: mockExtMethod,
@@ -1013,7 +1013,7 @@ describe("Session", () => {
   });
 
   describe("setCompaction", () => {
-    it("should call extMethod with _session/setCompaction", async () => {
+    it("should call extMethod with session/setCompaction", async () => {
       const mockExtMethod = vi.fn().mockResolvedValue({ success: true });
       const connectionWithExtMethod = {
         ...mockConnection,
@@ -1033,7 +1033,7 @@ describe("Session", () => {
         customInstructions: "Focus on key decisions",
       });
 
-      expect(mockExtMethod).toHaveBeenCalledWith("_session/setCompaction", {
+      expect(mockExtMethod).toHaveBeenCalledWith("session/setCompaction", {
         sessionId: "test-id",
         enabled: true,
         contextTokenThreshold: 50000,
@@ -1057,7 +1057,7 @@ describe("Session", () => {
 
       await session.setCompaction({ enabled: false });
 
-      expect(mockExtMethod).toHaveBeenCalledWith("_session/setCompaction", {
+      expect(mockExtMethod).toHaveBeenCalledWith("session/setCompaction", {
         sessionId: "test-id",
         enabled: false,
         contextTokenThreshold: undefined,
@@ -1103,7 +1103,7 @@ describe("Session", () => {
 
     it("should throw friendly error when method not found", async () => {
       const mockExtMethod = vi.fn().mockRejectedValue(
-        new Error("Method not found: _session/setCompaction")
+        new Error("Method not found: session/setCompaction")
       );
       const connectionWithExtMethod = {
         ...mockConnection,
