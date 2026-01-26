@@ -72,6 +72,12 @@ export type {
   AgentMeta,
 } from "./types.js";
 
+// Claude Code SDK options and skills types
+export type {
+  ClaudeCodeOptions,
+  SkillInfo,
+} from "./types.js";
+
 // Re-export ACP types - Terminals
 export type {
   CreateTerminalRequest,

@@ -1164,4 +1164,169 @@ describe("Session", () => {
       ).rejects.toThrow("Connection timeout");
     });
   });
+
+  describe("listSkills", () => {
+    it("should call extMethod with correct parameters", async () => {
+      const mockSkills = [
+        { name: "pdf-processor", description: "Process PDF files", source: "project" as const },
+        { name: "code-reviewer", description: "Review code", source: "user" as const },
+      ];
+      const mockExtMethod = vi.fn().mockResolvedValue({
+        success: true,
+        skills: mockSkills,
+      });
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      const skills = await session.listSkills();
+
+      expect(mockExtMethod).toHaveBeenCalledWith("session/listSkills", {
+        sessionId: "test-id",
+      });
+      expect(skills).toEqual(mockSkills);
+    });
+
+    it("should return empty array when no skills available", async () => {
+      const mockExtMethod = vi.fn().mockResolvedValue({
+        success: true,
+        skills: [],
+      });
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      const skills = await session.listSkills();
+
+      expect(skills).toEqual([]);
+    });
+
+    it("should return empty array when skills field is undefined", async () => {
+      const mockExtMethod = vi.fn().mockResolvedValue({
+        success: true,
+        // skills field not present
+      });
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      const skills = await session.listSkills();
+
+      expect(skills).toEqual([]);
+    });
+
+    it("should throw if connection does not support extMethod", async () => {
+      const session = new Session(
+        "test-id",
+        mockConnection as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await expect(session.listSkills()).rejects.toThrow(
+        "Agent does not support extension methods required for listing skills."
+      );
+    });
+
+    it("should throw with clear message when agent returns method not found", async () => {
+      const mockExtMethod = vi.fn().mockRejectedValue(
+        new Error("Method not found: session/listSkills")
+      );
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await expect(session.listSkills()).rejects.toThrow(
+        "Agent does not support listing skills."
+      );
+    });
+
+    it("should throw when agent returns error response", async () => {
+      const mockExtMethod = vi.fn().mockResolvedValue({
+        success: false,
+        error: "Session not found",
+      });
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await expect(session.listSkills()).rejects.toThrow("Session not found");
+    });
+
+    it("should throw generic error when agent returns failure without message", async () => {
+      const mockExtMethod = vi.fn().mockResolvedValue({
+        success: false,
+      });
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await expect(session.listSkills()).rejects.toThrow("Failed to list skills");
+    });
+
+    it("should propagate unexpected errors", async () => {
+      const mockExtMethod = vi.fn().mockRejectedValue(new Error("Network error"));
+      const connectionWithExtMethod = {
+        ...mockConnection,
+        extMethod: mockExtMethod,
+      };
+
+      const session = new Session(
+        "test-id",
+        connectionWithExtMethod as any,
+        mockClientHandler as any,
+        "/test/cwd"
+      );
+
+      await expect(session.listSkills()).rejects.toThrow("Network error");
+    });
+  });
 });

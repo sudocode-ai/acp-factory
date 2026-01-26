@@ -239,6 +239,82 @@ export interface CompactionConfig {
 }
 
 /**
+ * Claude Code SDK options that can be passed via agentMeta.
+ * These are forwarded to the Claude Agent SDK query() function.
+ *
+ * Note: Some options (cwd, permissionMode, canUseTool, etc.) are managed
+ * by the ACP layer and cannot be overridden.
+ */
+export interface ClaudeCodeOptions {
+  /**
+   * Setting sources for loading skills and other configuration from filesystem.
+   * - "user": Load from ~/.claude/ (user-level settings)
+   * - "project": Load from .claude/ in the working directory (project-level settings)
+   * - "local": Load from .claudecode/ (local overrides)
+   * @default ["user", "project", "local"]
+   */
+  settingSources?: Array<"user" | "project" | "local">;
+
+  /**
+   * Plugins to load from local paths.
+   * Each plugin can provide skills, commands, agents, hooks, and MCP servers.
+   *
+   * @example
+   * plugins: [
+   *   { type: "local", path: "./my-plugin" },
+   *   { type: "local", path: "~/.claude/plugins/my-marketplace-plugin" }
+   * ]
+   */
+  plugins?: Array<{
+    type: "local";
+    path: string;
+  }>;
+
+  /**
+   * Tools to allow. Add "Skill" to enable skill invocation.
+   * These are merged with ACP-managed tool allowances.
+   *
+   * @example
+   * allowedTools: ["Skill", "Read", "Write", "Bash"]
+   */
+  allowedTools?: string[];
+
+  /**
+   * Tools to disallow. These are merged with ACP-managed tool restrictions.
+   */
+  disallowedTools?: string[];
+
+  /**
+   * MCP servers to configure.
+   * These are merged with ACP-provided servers.
+   */
+  mcpServers?: Record<string, unknown>;
+
+  /**
+   * Hooks for pre/post tool use.
+   * These are merged with ACP's internal hooks.
+   */
+  hooks?: Record<string, unknown>;
+
+  /**
+   * Allow other Claude Agent SDK options to be passed through.
+   */
+  [key: string]: unknown;
+}
+
+/**
+ * Information about a skill available in a session.
+ */
+export interface SkillInfo {
+  /** Skill name */
+  name: string;
+  /** Skill description */
+  description?: string;
+  /** Source of the skill: user (~/.claude/skills/), project (.claude/skills/), or plugin */
+  source?: "user" | "project" | "plugin";
+}
+
+/**
  * Agent-specific metadata passed to the agent when creating a session.
  * This is passed through as `_meta` in the ACP NewSessionRequest.
  */
@@ -253,10 +329,10 @@ export interface AgentMeta {
     compaction?: CompactionConfig;
 
     /**
-     * Additional options passed to Claude Code SDK.
-     * See claude-code-acp documentation for available options.
+     * Options passed to Claude Agent SDK.
+     * Use this to configure skills, plugins, and other SDK features.
      */
-    options?: Record<string, unknown>;
+    options?: ClaudeCodeOptions;
   };
 
   /**

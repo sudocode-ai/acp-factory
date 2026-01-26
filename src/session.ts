@@ -6,7 +6,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import type * as acp from "@agentclientprotocol/sdk";
-import type { PromptContent, ExtendedSessionUpdate, FlushOptions, FlushResult, InjectResult, CompactionConfig } from "./types.js";
+import type { PromptContent, ExtendedSessionUpdate, FlushOptions, FlushResult, InjectResult, CompactionConfig, SkillInfo } from "./types.js";
 import type { ACPClientHandler } from "./client-handler.js";
 
 /**
@@ -466,6 +466,63 @@ export class Session {
     if (!result.success) {
       throw new Error(result.error ?? "Failed to set compaction configuration");
     }
+  }
+
+  /**
+   * List available skills for this session.
+   *
+   * Skills are loaded based on the session's settingSources and plugins configuration.
+   * This method returns the skills that were discovered during session initialization.
+   *
+   * @returns Array of skill information objects
+   * @throws If the agent does not support skill listing
+   *
+   * @example
+   * ```typescript
+   * const skills = await session.listSkills();
+   * console.log("Available skills:", skills.map(s => s.name));
+   * ```
+   */
+  async listSkills(): Promise<SkillInfo[]> {
+    // Check if the connection has extMethod capability
+    const connection = this.connection as unknown as {
+      extMethod?: (
+        method: string,
+        params: Record<string, unknown>
+      ) => Promise<{ success: boolean; skills?: SkillInfo[]; error?: string }>;
+    };
+
+    if (!connection.extMethod) {
+      throw new Error(
+        "Agent does not support extension methods required for listing skills."
+      );
+    }
+
+    let result: { success: boolean; skills?: SkillInfo[]; error?: string };
+    try {
+      result = await connection.extMethod("session/listSkills", {
+        sessionId: this.id,
+      });
+    } catch (error) {
+      const errorMessage = String(error);
+
+      // Check for "method not found" errors and provide a clearer message
+      if (
+        errorMessage.includes("Method not found") ||
+        errorMessage.includes("not supported")
+      ) {
+        throw new Error("Agent does not support listing skills.");
+      }
+
+      throw error;
+    }
+
+    // Handle error response from the agent
+    if (!result.success) {
+      throw new Error(result.error ?? "Failed to list skills");
+    }
+
+    return result.skills ?? [];
   }
 
   /**
