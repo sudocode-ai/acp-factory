@@ -69,8 +69,8 @@
     "@agentclientprotocol/sdk": "^0.13.0"
   },
   "peerDependencies": {
-    "@sudocode-ai/claude-code-acp": "^0.13.7",
-    "@zed-industries/codex-acp": "^0.7.4",
+    "@sudocode-ai/claude-code-acp": "^0.13.8",
+    "@zed-industries/codex-acp": "^0.9.0",
     "@github/copilot": ">0.0.388",
     "@google/gemini-cli": "^0.21.0"
   },

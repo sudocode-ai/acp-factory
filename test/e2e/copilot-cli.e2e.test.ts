@@ -8,7 +8,7 @@
  * Note: Copilot CLI ACP support is currently in early/iterative stage.
  * Some capabilities may not be fully implemented yet.
  *
- * Run with: RUN_E2E_TESTS=true npm run test:run -- test/e2e/copilot-cli.e2e.test.ts
+ * Run with: RUN_E2E_TESTS=true npm run test:run -- test/e2e/copilot.e2e.test.ts
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { AgentFactory } from "../../src/factory.js";
@@ -26,12 +26,12 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Copilot CLI Agent", () => {
 
   beforeAll(async () => {
     // Spawn Copilot CLI agent
-    handle = await AgentFactory.spawn("copilot-cli");
+    handle = await AgentFactory.spawn("copilot");
   }, 120000);
 
   beforeEach(() => {
     // Create a unique temp directory for each test
-    tempDir = fs.mkdtempSync(os.tmpdir() + "/copilot-cli-e2e-");
+    tempDir = fs.mkdtempSync(os.tmpdir() + "/copilot-e2e-");
   });
 
   afterEach(() => {
@@ -48,15 +48,15 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Copilot CLI Agent", () => {
   });
 
   describe("agent initialization", () => {
-    it("should have copilot-cli registered in factory", () => {
-      const config = AgentFactory.getConfig("copilot-cli");
+    it("should have copilot registered in factory", () => {
+      const config = AgentFactory.getConfig("copilot");
       expect(config).toBeDefined();
       expect(config?.command).toBe("npx");
       expect(config?.args).toContain("@github/copilot");
       expect(config?.args).toContain("--acp");
     });
 
-    it("should spawn copilot-cli agent successfully", () => {
+    it("should spawn copilot agent successfully", () => {
       expect(handle).toBeDefined();
       expect(handle.capabilities).toBeDefined();
     });
@@ -95,7 +95,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Copilot CLI Agent", () => {
 
     beforeAll(async () => {
       // Create a dedicated temp directory for this describe block
-      promptTempDir = fs.mkdtempSync(os.tmpdir() + "/copilot-cli-prompt-e2e-");
+      promptTempDir = fs.mkdtempSync(os.tmpdir() + "/copilot-prompt-e2e-");
       session = await handle.createSession(promptTempDir);
     }, 60000);
 
@@ -473,14 +473,14 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Copilot CLI Agent", () => {
 });
 
 describe.skipIf(!RUN_E2E_TESTS)("E2E: All Agents Comparison", () => {
-  it("should have copilot-cli registered", () => {
+  it("should have copilot registered", () => {
     const agents = AgentFactory.listAgents();
 
-    expect(agents).toContain("copilot-cli");
+    expect(agents).toContain("copilot");
   });
 
-  it("should spawn copilot-cli agent successfully", async () => {
-    const copilotHandle = await AgentFactory.spawn("copilot-cli");
+  it("should spawn copilot agent successfully", async () => {
+    const copilotHandle = await AgentFactory.spawn("copilot");
     expect(copilotHandle).toBeDefined();
     expect(copilotHandle.capabilities).toBeDefined();
 

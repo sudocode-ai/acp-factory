@@ -511,7 +511,7 @@ describe("Session", () => {
 
       const result = await session.inject("Injected message");
 
-      expect(mockExtMethod).toHaveBeenCalledWith("session/inject", {
+      expect(mockExtMethod).toHaveBeenCalledWith("_session/inject", {
         sessionId: "test-id",
         message: [{ type: "text", text: "Injected message" }],
       });
@@ -539,7 +539,7 @@ describe("Session", () => {
 
       const result = await session.inject(blocks);
 
-      expect(mockExtMethod).toHaveBeenCalledWith("session/inject", {
+      expect(mockExtMethod).toHaveBeenCalledWith("_session/inject", {
         sessionId: "test-id",
         message: blocks,
       });
@@ -751,7 +751,7 @@ describe("Session", () => {
       const result = await session.checkInjectSupport();
 
       expect(result).toBe(true);
-      expect(mockExtMethod).toHaveBeenCalledWith("session/inject", {
+      expect(mockExtMethod).toHaveBeenCalledWith("_session/inject", {
         sessionId: "test-id",
         message: [],
       });
@@ -1033,7 +1033,7 @@ describe("Session", () => {
         customInstructions: "Focus on key decisions",
       });
 
-      expect(mockExtMethod).toHaveBeenCalledWith("session/setCompaction", {
+      expect(mockExtMethod).toHaveBeenCalledWith("_session/setCompaction", {
         sessionId: "test-id",
         enabled: true,
         contextTokenThreshold: 50000,
@@ -1057,7 +1057,7 @@ describe("Session", () => {
 
       await session.setCompaction({ enabled: false });
 
-      expect(mockExtMethod).toHaveBeenCalledWith("session/setCompaction", {
+      expect(mockExtMethod).toHaveBeenCalledWith("_session/setCompaction", {
         sessionId: "test-id",
         enabled: false,
         contextTokenThreshold: undefined,
@@ -1189,7 +1189,7 @@ describe("Session", () => {
 
       const skills = await session.listSkills();
 
-      expect(mockExtMethod).toHaveBeenCalledWith("session/listSkills", {
+      expect(mockExtMethod).toHaveBeenCalledWith("_session/listSkills", {
         sessionId: "test-id",
       });
       expect(skills).toEqual(mockSkills);

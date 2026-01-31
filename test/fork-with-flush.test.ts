@@ -583,7 +583,7 @@ describe("Fork-with-flush helpers", () => {
 
       const forkedSession = await session.forkWithFlush({ idleTimeout: 100 });
 
-      expect(extMethodMock).toHaveBeenCalledWith("session/flush", {
+      expect(extMethodMock).toHaveBeenCalledWith("_session/flush", {
         sessionId: "test-session",
         idleTimeout: 100,
         persistTimeout: 5000,
@@ -791,7 +791,7 @@ describe("Fork-with-flush helpers", () => {
 
       await session.flush({ idleTimeout: 1000, persistTimeout: 2000 });
 
-      expect(extMethodMock).toHaveBeenCalledWith("session/flush", {
+      expect(extMethodMock).toHaveBeenCalledWith("_session/flush", {
         sessionId: "test-session",
         idleTimeout: 1000,
         persistTimeout: 2000,
@@ -816,7 +816,7 @@ describe("Fork-with-flush helpers", () => {
 
       await session.flush();
 
-      expect(extMethodMock).toHaveBeenCalledWith("session/flush", {
+      expect(extMethodMock).toHaveBeenCalledWith("_session/flush", {
         sessionId: "test-session",
         idleTimeout: 5000,
         persistTimeout: 5000,

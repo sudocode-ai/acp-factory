@@ -15,7 +15,15 @@
  *
  * Run with: RUN_E2E_TESTS=true npm run test:run -- test/e2e/fork-with-flush.e2e.test.ts
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+} from "vitest";
 import { AgentFactory } from "../../src/factory.js";
 import type { AgentHandle } from "../../src/agent-handle.js";
 import type { Session } from "../../src/session.js";
@@ -29,7 +37,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const RUN_E2E_TESTS = process.env.RUN_E2E_TESTS === "true";
 
 // Use local fork path for testing before npm publish
-const LOCAL_FORK_PATH = resolve(__dirname, "../../references/claude-code-acp-fork");
+const LOCAL_FORK_PATH = resolve(
+  __dirname,
+  "../../references/claude-code-acp-fork",
+);
 
 describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
   let handle: AgentHandle;
@@ -44,7 +55,10 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
     });
 
     // Use local fork if available, otherwise use published version
-    const agentType = process.env.USE_LOCAL_FORK === "true" ? "claude-code-local" : "claude-code";
+    const agentType =
+      process.env.USE_LOCAL_FORK === "true"
+        ? "claude-code-local"
+        : "claude-code";
     handle = await AgentFactory.spawn(agentType);
   }, 120000);
 
@@ -81,7 +95,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       // Send initial prompt to establish history
       const updates: ExtendedSessionUpdate[] = [];
       for await (const update of session.prompt(
-        "Say exactly: 'Hello from original session'. Nothing else."
+        "Say exactly: 'Hello from original session'. Nothing else.",
       )) {
         updates.push(update);
       }
@@ -127,7 +141,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       let promptComplete = false;
       const promptPromise = (async () => {
         for await (const update of session.prompt(
-          "Count from 1 to 5, saying each number on a new line. Be brief."
+          "Count from 1 to 5, saying each number on a new line. Be brief.",
         )) {
           // Consume updates
         }
@@ -135,7 +149,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       })();
 
       // Give the prompt a moment to start processing
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // The session should be processing now
       // Note: isProcessing might be false if the prompt completed quickly
@@ -174,7 +188,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       const promptPromise = (async () => {
         try {
           for await (const update of session.prompt(
-            "Write a very long essay about the history of computing. Make it at least 500 words."
+            "Write a very long essay about the history of computing. Make it at least 500 words.",
           )) {
             // Consume updates
           }
@@ -184,7 +198,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       })();
 
       // Give the prompt time to start processing
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Fork with a short idle timeout - this should trigger interrupt
       const startTime = Date.now();
@@ -216,7 +230,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
 
       // Send a prompt to establish history
       for await (const update of session.prompt(
-        "Remember the secret code: ALPHA-7. Just acknowledge this briefly."
+        "Remember the secret code: ALPHA-7. Just acknowledge this briefly.",
       )) {
         // Consume updates
       }
@@ -244,7 +258,9 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       const session = await handle.createSession(tempDir);
 
       // Send initial prompt
-      for await (const update of session.prompt("Say 'First message received'. Nothing else.")) {
+      for await (const update of session.prompt(
+        "Say 'First message received'. Nothing else.",
+      )) {
         // Consume updates
       }
 
@@ -257,7 +273,9 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
 
       // Session should still be usable after flush
       const updates: ExtendedSessionUpdate[] = [];
-      for await (const update of session.prompt("Say 'Second message received'. Nothing else.")) {
+      for await (const update of session.prompt(
+        "Say 'Second message received'. Nothing else.",
+      )) {
         updates.push(update);
       }
 
@@ -280,7 +298,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       // Establish a memorable fact in the original session
       const secretNumber = Math.floor(Math.random() * 9000) + 1000;
       for await (const update of session.prompt(
-        `Remember this exact number: ${secretNumber}. Just say 'I will remember ${secretNumber}'.`
+        `Remember this exact number: ${secretNumber}. Just say 'I will remember ${secretNumber}'.`,
       )) {
         // Consume updates
       }
@@ -297,9 +315,12 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       // Ask the forked session to recall the number
       let recalledText = "";
       for await (const update of forkedSession.prompt(
-        "What was the number I asked you to remember? Just say the number, nothing else."
+        "What was the number I asked you to remember? Just say the number, nothing else.",
       )) {
-        if (update.sessionUpdate === "agent_message_chunk" && "content" in update) {
+        if (
+          update.sessionUpdate === "agent_message_chunk" &&
+          "content" in update
+        ) {
           const content = update.content as { type: string; text?: string };
           if (content.type === "text" && content.text) {
             recalledText += content.text;
@@ -327,7 +348,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
 
       // Send initial prompt
       for await (const update of session.prompt(
-        "Say 'Original session initialized'. Nothing else."
+        "Say 'Original session initialized'. Nothing else.",
       )) {
         // Consume updates
       }
@@ -344,7 +365,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       // The original session should continue to work
       const originalUpdates: ExtendedSessionUpdate[] = [];
       for await (const update of session.prompt(
-        "Say 'Original session still working'. Nothing else."
+        "Say 'Original session still working'. Nothing else.",
       )) {
         originalUpdates.push(update);
       }
@@ -355,7 +376,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       // Use the forked session too - both should work independently
       const forkedUpdates: ExtendedSessionUpdate[] = [];
       for await (const update of forkedSession.prompt(
-        "Say 'Forked session is working'. Nothing else."
+        "Say 'Forked session is working'. Nothing else.",
       )) {
         forkedUpdates.push(update);
       }
@@ -376,7 +397,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
 
       // Establish common history
       for await (const update of session.prompt(
-        "Remember: The shared value is BEFORE_FORK. Just acknowledge."
+        "Remember: The shared value is BEFORE_FORK. Just acknowledge.",
       )) {
         // Consume updates
       }
@@ -389,14 +410,14 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
 
       // Update original session with new info
       for await (const update of session.prompt(
-        "Update: Change the value to ORIGINAL_ONLY. Just acknowledge."
+        "Update: Change the value to ORIGINAL_ONLY. Just acknowledge.",
       )) {
         // Consume updates
       }
 
       // Update forked session with different info
       for await (const update of forkedSession.prompt(
-        "Update: Change the value to FORKED_ONLY. Just acknowledge."
+        "Update: Change the value to FORKED_ONLY. Just acknowledge.",
       )) {
         // Consume updates
       }
@@ -404,9 +425,12 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       // Verify original session has its own state
       let originalRecall = "";
       for await (const update of session.prompt(
-        "What is the current value? Just say the value, nothing else."
+        "What is the current value? Just say the value, nothing else.",
       )) {
-        if (update.sessionUpdate === "agent_message_chunk" && "content" in update) {
+        if (
+          update.sessionUpdate === "agent_message_chunk" &&
+          "content" in update
+        ) {
           const content = update.content as { type: string; text?: string };
           if (content.type === "text" && content.text) {
             originalRecall += content.text;
@@ -418,9 +442,12 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       // Verify forked session has its own state
       let forkedRecall = "";
       for await (const update of forkedSession.prompt(
-        "What is the current value? Just say the value, nothing else."
+        "What is the current value? Just say the value, nothing else.",
       )) {
-        if (update.sessionUpdate === "agent_message_chunk" && "content" in update) {
+        if (
+          update.sessionUpdate === "agent_message_chunk" &&
+          "content" in update
+        ) {
           const content = update.content as { type: string; text?: string };
           if (content.type === "text" && content.text) {
             forkedRecall += content.text;
@@ -443,7 +470,9 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       const session = await handle.createSession(tempDir);
 
       // Send initial prompt
-      for await (const update of session.prompt("Say 'Ready for forking'. Nothing else.")) {
+      for await (const update of session.prompt(
+        "Say 'Ready for forking'. Nothing else.",
+      )) {
         // Consume updates
       }
 
@@ -458,7 +487,7 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       }
 
       // Verify all forks have unique IDs
-      const ids = new Set(forks.map(f => f.id));
+      const ids = new Set(forks.map((f) => f.id));
       expect(ids.size).toBe(3);
 
       // All forks should be different from original
@@ -486,7 +515,9 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
 
       // Create and initialize original session
       const session = await handle.createSession(tempDir);
-      for await (const update of session.prompt("Say 'Generation 0'. Nothing else.")) {
+      for await (const update of session.prompt(
+        "Say 'Generation 0'. Nothing else.",
+      )) {
         // Consume updates
       }
 
@@ -508,7 +539,9 @@ describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
       // All three sessions should work
       for (const s of [session, fork1, fork2]) {
         const updates: ExtendedSessionUpdate[] = [];
-        for await (const update of s.prompt("Say 'Session active'. Nothing else.")) {
+        for await (const update of s.prompt(
+          "Say 'Session active'. Nothing else.",
+        )) {
           updates.push(update);
         }
         expect(updates.length).toBeGreaterThan(0);
