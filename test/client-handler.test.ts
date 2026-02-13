@@ -373,6 +373,56 @@ describe("ACPClientHandler", () => {
     });
   });
 
+  describe("setPermissionMode", () => {
+    const createPermissionRequest = (
+      options: Array<{ kind: string; optionId: string; name: string }>
+    ): RequestPermissionRequest => ({
+      sessionId: "test-session",
+      toolCall: {
+        toolCallId: "tool-1",
+        title: "Test Tool",
+        status: "pending",
+      },
+      options: options.map((opt) => ({
+        kind: opt.kind as "allow_once" | "allow_always" | "reject_once" | "reject_always",
+        optionId: opt.optionId,
+        name: opt.name,
+      })),
+    });
+
+    it("should change permission behavior at runtime", async () => {
+      const handler = new ACPClientHandler({}, "auto-approve");
+
+      // Initially auto-approves
+      const result1 = await handler.requestPermission(
+        createPermissionRequest([
+          { kind: "allow_once", optionId: "allow", name: "Allow" },
+          { kind: "reject_once", optionId: "reject", name: "Reject" },
+        ])
+      );
+      expect(result1.outcome).toEqual({ outcome: "selected", optionId: "allow" });
+
+      // Switch to auto-deny
+      handler.setPermissionMode("auto-deny");
+
+      const result2 = await handler.requestPermission(
+        createPermissionRequest([
+          { kind: "allow_once", optionId: "allow", name: "Allow" },
+          { kind: "reject_once", optionId: "reject", name: "Reject" },
+        ])
+      );
+      expect(result2.outcome).toEqual({ outcome: "selected", optionId: "reject" });
+    });
+
+    it("should report current mode via getPermissionMode", () => {
+      const handler = new ACPClientHandler({}, "auto-approve");
+      expect(handler.getPermissionMode()).toBe("auto-approve");
+
+      handler.setPermissionMode("interactive");
+      expect(handler.getPermissionMode()).toBe("interactive");
+    });
+  });
+
   describe("sessionUpdate", () => {
     it("should push updates to session stream", async () => {
       const handler = new ACPClientHandler();

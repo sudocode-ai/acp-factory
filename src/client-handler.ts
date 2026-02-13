@@ -98,6 +98,21 @@ export class ACPClientHandler implements acp.Client {
   }
 
   /**
+   * Change the permission mode at runtime.
+   * Takes effect on the next permission request; in-flight requests use the old mode.
+   */
+  setPermissionMode(mode: PermissionMode): void {
+    this.permissionMode = mode;
+  }
+
+  /**
+   * Get the current permission mode
+   */
+  getPermissionMode(): PermissionMode {
+    return this.permissionMode;
+  }
+
+  /**
    * Get or create a pushable stream for a session
    */
   getSessionStream(sessionId: string): Pushable<ExtendedSessionUpdate> {

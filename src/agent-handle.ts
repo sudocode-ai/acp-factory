@@ -5,7 +5,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { Writable, Readable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
-import type { AgentConfig, SpawnOptions, SessionOptions, ForkSessionOptions, AgentMeta } from "./types.js";
+import type { AgentConfig, SpawnOptions, SessionOptions, ForkSessionOptions, AgentMeta, PermissionMode } from "./types.js";
 import type { AgentCapabilities } from "@agentclientprotocol/sdk";
 import { Session } from "./session.js";
 import { ACPClientHandler } from "./client-handler.js";
@@ -284,5 +284,20 @@ export class AgentHandle {
    */
   isRunning(): boolean {
     return !this.process.killed && this.process.exitCode === null;
+  }
+
+  /**
+   * Change the permission mode at runtime.
+   * Takes effect on the next permission request; in-flight requests use the old mode.
+   */
+  setPermissionMode(mode: PermissionMode): void {
+    this.clientHandler.setPermissionMode(mode);
+  }
+
+  /**
+   * Get the current permission mode
+   */
+  getPermissionMode(): PermissionMode {
+    return this.clientHandler.getPermissionMode();
   }
 }
