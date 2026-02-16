@@ -48,6 +48,7 @@ export class AgentHandle {
 
     const agentProcess = spawn(config.command, config.args, {
       stdio: ["pipe", "pipe", "inherit"],
+      detached: true,
       env,
     });
 
@@ -264,12 +265,36 @@ export class AgentHandle {
   }
 
   /**
-   * Close the agent connection and terminate the process
+   * Close the agent connection and terminate the process tree.
+   * Sends SIGTERM to the entire process group, waits up to 5 seconds,
+   * then force-kills with SIGKILL if still running.
    */
   async close(): Promise<void> {
-    this.process.kill();
-    // Wait for the connection to close
-    await this.connection.closed;
+    const pid = this.process.pid;
+    if (pid) {
+      try {
+        // Kill the entire process group (negative PID) so child processes
+        // (e.g., claude-code-acp → claude) are also terminated
+        process.kill(-pid, "SIGTERM");
+      } catch {
+        // Process may already be dead
+      }
+    }
+
+    // Wait for the connection to close (max 5 seconds)
+    await Promise.race([
+      this.connection.closed,
+      new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+    ]);
+
+    // Force kill the process group if still running
+    if (pid && !this.process.killed && this.process.exitCode === null) {
+      try {
+        process.kill(-pid, "SIGKILL");
+      } catch {
+        // Process may already be dead
+      }
+    }
   }
 
   /**

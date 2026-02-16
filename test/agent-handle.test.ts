@@ -23,10 +23,12 @@ describe("AgentHandle", () => {
   let mockProcess: EventEmitter & {
     stdin: Writable;
     stdout: Readable;
+    pid: number;
     kill: ReturnType<typeof vi.fn>;
     killed: boolean;
     exitCode: number | null;
   };
+  let processKillSpy: ReturnType<typeof vi.spyOn>;
   let mockConnection: {
     initialize: ReturnType<typeof vi.fn>;
     newSession: ReturnType<typeof vi.fn>;
@@ -55,10 +57,14 @@ describe("AgentHandle", () => {
       stdout: new Readable({
         read() {},
       }),
+      pid: 12345,
       kill: vi.fn(),
       killed: false,
       exitCode: null,
     });
+
+    // Spy on process.kill to verify process group kills
+    processKillSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
 
     // Create mock connection
     mockConnection = {
@@ -105,6 +111,7 @@ describe("AgentHandle", () => {
   });
 
   afterEach(() => {
+    processKillSpy.mockRestore();
     vi.clearAllMocks();
   });
 
@@ -117,6 +124,18 @@ describe("AgentHandle", () => {
         ["--test"],
         expect.objectContaining({
           stdio: ["pipe", "pipe", "inherit"],
+        })
+      );
+    });
+
+    it("should spawn subprocess with detached: true for process group kill", async () => {
+      await AgentHandle.create(testConfig, {});
+
+      expect(spawn).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({
+          detached: true,
         })
       );
     });
@@ -456,11 +475,116 @@ describe("AgentHandle", () => {
   });
 
   describe("close", () => {
-    it("should kill process and wait for connection to close", async () => {
+    it("should send SIGTERM to the process group (negative PID)", async () => {
       const handle = await AgentHandle.create(testConfig, {});
       await handle.close();
 
-      expect(mockProcess.kill).toHaveBeenCalled();
+      // Should kill the process group, not just the process
+      expect(processKillSpy).toHaveBeenCalledWith(-12345, "SIGTERM");
+    });
+
+    it("should wait for connection to close", async () => {
+      let resolveConnection: () => void;
+      const closedPromise = new Promise<void>((resolve) => {
+        resolveConnection = resolve;
+      });
+      mockConnection.closed = closedPromise;
+
+      const handle = await AgentHandle.create(testConfig, {});
+
+      let closeResolved = false;
+      const closePromise = handle.close().then(() => {
+        closeResolved = true;
+      });
+
+      // Close hasn't resolved yet (connection still open)
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Resolve the connection
+      resolveConnection!();
+      await closePromise;
+
+      expect(closeResolved).toBe(true);
+    });
+
+    it("should not wait longer than 5 seconds for connection close", async () => {
+      vi.useFakeTimers();
+
+      // Connection that never closes
+      mockConnection.closed = new Promise<void>(() => {});
+
+      const handle = await AgentHandle.create(testConfig, {});
+
+      const closePromise = handle.close();
+
+      // Advance past the 5-second timeout
+      await vi.advanceTimersByTimeAsync(5000);
+      await closePromise;
+
+      // Should have sent SIGTERM, then SIGKILL after timeout
+      expect(processKillSpy).toHaveBeenCalledWith(-12345, "SIGTERM");
+
+      vi.useRealTimers();
+    });
+
+    it("should SIGKILL process group if still running after timeout", async () => {
+      vi.useFakeTimers();
+
+      // Connection that never closes
+      mockConnection.closed = new Promise<void>(() => {});
+
+      const handle = await AgentHandle.create(testConfig, {});
+
+      const closePromise = handle.close();
+
+      // Advance past the 5-second timeout
+      await vi.advanceTimersByTimeAsync(5000);
+      await closePromise;
+
+      // Should have sent SIGTERM first, then SIGKILL after timeout
+      expect(processKillSpy).toHaveBeenCalledWith(-12345, "SIGTERM");
+      expect(processKillSpy).toHaveBeenCalledWith(-12345, "SIGKILL");
+
+      vi.useRealTimers();
+    });
+
+    it("should not SIGKILL if process exited gracefully", async () => {
+      const handle = await AgentHandle.create(testConfig, {});
+
+      // Simulate process already exited
+      mockProcess.killed = true;
+      mockProcess.exitCode = 0;
+
+      await handle.close();
+
+      // Should have sent SIGTERM but NOT SIGKILL
+      expect(processKillSpy).toHaveBeenCalledWith(-12345, "SIGTERM");
+      expect(processKillSpy).not.toHaveBeenCalledWith(-12345, "SIGKILL");
+    });
+
+    it("should handle process already dead gracefully", async () => {
+      // process.kill throws ESRCH when process doesn't exist
+      processKillSpy.mockImplementation(() => {
+        const err = new Error("kill ESRCH");
+        (err as NodeJS.ErrnoException).code = "ESRCH";
+        throw err;
+      });
+
+      const handle = await AgentHandle.create(testConfig, {});
+
+      // Should not throw
+      await expect(handle.close()).resolves.toBeUndefined();
+    });
+
+    it("should handle missing PID gracefully", async () => {
+      // Simulate process with no PID (shouldn't happen but defensive)
+      (mockProcess as any).pid = undefined;
+
+      const handle = await AgentHandle.create(testConfig, {});
+      await handle.close();
+
+      // Should not have attempted process.kill
+      expect(processKillSpy).not.toHaveBeenCalled();
     });
   });
 
