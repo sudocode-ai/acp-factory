@@ -2,13 +2,15 @@
   "name": "acp-factory",
   "version": "0.1.12",
   "description": "A library for spawning and managing agents through the Agent Client Protocol (ACP)",
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
   },
   "files": [
@@ -18,8 +20,8 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "test": "vitest",
     "test:run": "vitest run",
     "test:e2e": "RUN_E2E_TESTS=true vitest run test/e2e/",
@@ -90,6 +92,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
     "typescript": "^5.7.0",
     "vitest": "^2.0.0"
   }
