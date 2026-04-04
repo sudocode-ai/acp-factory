@@ -9,6 +9,6 @@ import type { AgentConfig } from "../types.js";
  */
 export const claudeCodeConfig: AgentConfig = {
   command: "npx",
-  args: ["@sudocode-ai/claude-code-acp"],
+  args: ["@agentclientprotocol/claude-agent-acp"],
   env: {},
 };

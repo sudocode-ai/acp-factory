@@ -397,8 +397,8 @@ export class ACPClientHandler implements acp.Client {
    * Handle terminal kill requests
    */
   async killTerminal(
-    params: acp.KillTerminalCommandRequest
-  ): Promise<acp.KillTerminalCommandResponse> {
+    params: acp.KillTerminalRequest
+  ): Promise<acp.KillTerminalResponse> {
     if (!this.handlers.onTerminalKill) {
       throw new Error(
         "Terminal operations not supported: no onTerminalKill handler provided"

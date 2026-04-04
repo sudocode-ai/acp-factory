@@ -3,7 +3,7 @@
  *
  * These tests use the real Claude CLI and require:
  * 1. Claude CLI installed and authenticated (`claude auth login`)
- * 2. @sudocode-ai/claude-code-acp available (or use local fork)
+ * 2. @agentclientprotocol/claude-agent-acp available (or use local fork)
  *
  * Run with: RUN_FULL_AGENTS=true npm run test:run -- test/e2e/skills.e2e.test.ts
  */
@@ -19,7 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const RUN_FULL_AGENTS = process.env.RUN_FULL_AGENTS === "true";
 
 // Use local fork path for testing before npm publish
-const LOCAL_FORK_PATH = resolve(__dirname, "../../references/claude-code-acp-fork");
+const LOCAL_FORK_PATH = resolve(__dirname, "../../references/claude-code-acp");
 
 // Test project directory for skills
 const TEST_PROJECT_DIR = resolve(__dirname, "../../.test-skills-project");

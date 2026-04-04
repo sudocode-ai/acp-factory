@@ -11,7 +11,7 @@
  *
  * Prerequisites:
  * 1. Claude CLI installed and authenticated (`claude auth login`)
- * 2. @sudocode-ai/claude-code-acp available (or use local fork)
+ * 2. @agentclientprotocol/claude-agent-acp available (or use local fork)
  *
  * Run with: RUN_E2E_TESTS=true npm run test:run -- test/e2e/fork-with-flush.e2e.test.ts
  */
@@ -39,10 +39,11 @@ const RUN_E2E_TESTS = process.env.RUN_E2E_TESTS === "true";
 // Use local fork path for testing before npm publish
 const LOCAL_FORK_PATH = resolve(
   __dirname,
-  "../../references/claude-code-acp-fork",
+  "../../references/claude-code-acp",
 );
 
-describe.skipIf(!RUN_E2E_TESTS)("E2E: Fork-with-flush", () => {
+// Skip: _session/flush is not supported in the @agentclientprotocol/claude-agent-acp (Zed) version
+describe.skip("E2E: Fork-with-flush", () => {
   let handle: AgentHandle;
   let tempDir: string;
 
