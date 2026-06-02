@@ -287,12 +287,20 @@ export class AgentHandle {
       new Promise<void>((resolve) => setTimeout(resolve, 5000)),
     ]);
 
-    // Force kill the process group if still running
-    if (pid && !this.process.killed && this.process.exitCode === null) {
+    // Force-kill based on the PROCESS GROUP's liveness, NOT this.process.
+    // `this.process` is often a wrapper (e.g. `npx`) that proxies SIGTERM to its
+    // child and then exits itself — flipping this.process.exitCode non-null while
+    // the real adapter and its MCP-server children (claude, mcp_env, claude -p)
+    // are still alive in the same group. Probing this.process there skipped the
+    // SIGKILL and orphaned the whole subtree. Instead probe the group with
+    // signal 0 (throws ESRCH once the group is empty) and SIGKILL it if any
+    // member survives. Spawned with detached:true, so pgid === pid.
+    if (pid) {
       try {
-        process.kill(-pid, "SIGKILL");
+        process.kill(-pid, 0); // probe the group — throws if it's already gone
+        process.kill(-pid, "SIGKILL"); // a member is still alive → reap the group
       } catch {
-        // Process may already be dead
+        // ESRCH: the process group has fully exited. Nothing to do.
       }
     }
   }
