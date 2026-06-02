@@ -548,18 +548,53 @@ describe("AgentHandle", () => {
       vi.useRealTimers();
     });
 
-    it("should not SIGKILL if process exited gracefully", async () => {
+    it("should not SIGKILL if the process group has already exited", async () => {
       const handle = await AgentHandle.create(testConfig, {});
 
-      // Simulate process already exited
+      // Graceful exit = the whole process GROUP is gone. The post-grace liveness
+      // probe (kill(-pid, 0)) then throws ESRCH, so escalation to SIGKILL is
+      // correctly skipped. Note: we no longer gate on this.process.exitCode —
+      // that reflects the (often `npx`) wrapper, which can exit while its
+      // children still live; the group probe is the source of truth.
       mockProcess.killed = true;
       mockProcess.exitCode = 0;
+      processKillSpy.mockImplementation((_pid: number, signal?: string | number) => {
+        if (signal === 0) {
+          const err = new Error("kill ESRCH");
+          (err as NodeJS.ErrnoException).code = "ESRCH";
+          throw err;
+        }
+        return true;
+      });
 
       await handle.close();
 
-      // Should have sent SIGTERM but NOT SIGKILL
+      // SIGTERM sent, group probed, no SIGKILL (group already gone).
       expect(processKillSpy).toHaveBeenCalledWith(-12345, "SIGTERM");
+      expect(processKillSpy).toHaveBeenCalledWith(-12345, 0);
       expect(processKillSpy).not.toHaveBeenCalledWith(-12345, "SIGKILL");
+    });
+
+    it("should SIGKILL the group when it is still alive even if the wrapper process exited", async () => {
+      // Regression guard: the spawned command is typically `npx`, which proxies
+      // SIGTERM to its child and exits — flipping this.process.exitCode non-null
+      // while the real adapter + its MCP-server children (claude, mcp_env,
+      // claude -p) survive in the same process group. Escalation must key on the
+      // GROUP probe (kill(-pid, 0) succeeds), NOT this.process.exitCode, or the
+      // whole subtree is orphaned.
+      const handle = await AgentHandle.create(testConfig, {});
+
+      // Wrapper looks "exited"...
+      mockProcess.killed = true;
+      mockProcess.exitCode = 0;
+      // ...but the group is still alive: the default spy makes kill(-pid, 0)
+      // return true (no ESRCH), so the group must be SIGKILLed.
+
+      await handle.close();
+
+      expect(processKillSpy).toHaveBeenCalledWith(-12345, "SIGTERM");
+      expect(processKillSpy).toHaveBeenCalledWith(-12345, 0);
+      expect(processKillSpy).toHaveBeenCalledWith(-12345, "SIGKILL");
     });
 
     it("should handle process already dead gracefully", async () => {
